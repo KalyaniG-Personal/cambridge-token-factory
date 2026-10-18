@@ -3,7 +3,7 @@
 **The AI data center of 2035, 50 m under Cambridge, MA.** Built for Track 1 of the SundAI × MIT AI Hackathon: design the most cost-effective energy-to-token conversion factory.
 
 - **Live demo:** `index.html` (fleet planner and plant digital twin)
-- **3D model:** `demo/cambridge-3d.html` (Cambridge cutaway: winter and summer heat flows to homes, MIT, the Charles River and the aquifer)
+- **3D model:** `cambridge-3d.html` (Cambridge cutaway: winter and summer heat flows to homes, MIT, the Charles River and the aquifer)
 - **Bonus:** `demo/cool-chiplets.html` (Track 2 chiplet thermal optimizer)
 - **Pitch:** `pitch/` has the 12-slide deck (speaker notes, sources on every slide) and the Word playbook with script, Q&A and challenges
 - **Research and citations:** `Cambridge_Token_Factory_Research_Citations.docx` lists every paper and source with what we used it for; `Research_Citations_QR.png` links to it
@@ -75,7 +75,7 @@ No study or plant yet combines all of these at 100 MW under a city. The evidence
 
 [2] Wang P., Gao Z., Kowalski S.P., et al. (2024). District heating utilizing waste heat of a data center: High-temperature heat pumps. Energy and Buildings, 315, 114327. doi:10.1016/j.enbuild.2024.114327 *(journal)* https://ornl.gov/publication/district-heating-utilizing-waste-heat-data-center-high-temperature-heat-pumps
 
-[3] Oh H., Sickinger D., Acero-Allard D. (2025). Techno-economic analysis of reservoir (aquifer) thermal energy storage for data center cooling. Applied Energy. Summary by the National Laboratory of the Rockies (formerly NREL). *(journal)* https://www.nrel.gov/grid/news/program/2025/nlr-analysis-identifies-reservoir-thermal-energy-storage-as-a-solution-for-data-center-cooling-needs
+[3] Oh H., Jin W., Peng P., Winick J.A., Sickinger D., Sartor D., Zhang Y., Beckers K., Kitz K., Acero-Allard D., Atkinson T.A., Dobson P. (2025). Techno-economic performance of reservoir thermal energy storage for data center cooling system. Applied Energy, 391, 125858. doi:10.1016/j.apenergy.2025.125858 *(journal)* https://doi.org/10.1016/j.apenergy.2025.125858 · Lab summary: https://www.nlr.gov/news/detail/program/2025/nlr-analysis-identifies-reservoir-thermal-energy-storage-as-a-solution-for-data-center-cooling-needs
 
 [4] Microsoft researchers (2025). Using life cycle assessment to drive innovation for sustainable cool clouds. Nature. Summary by Microsoft. *(journal)* https://news.microsoft.com/source/features/sustainability/microsoft-quantifies-environmental-impacts-of-datacenter-cooling-from-cradle-to-grave-in-new-nature-study/
 
