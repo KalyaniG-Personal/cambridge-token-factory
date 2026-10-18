@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Cool Chiplets</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;600&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: lab-bench console. Thermal maps are the hero; pipeline controls in a side rail; method notes below. */
+:root {
+  --bg: #f3f4f6; --panel: #ffffff; --ink: #14171c; --muted: #5b6370; --line: #d9dde3;
+  --accent: #e2562b; --cool: #2f7fd1; --good: #1f8a54; --bad: #c4302b; --warn: #b7791f;
+  --chip-c: #14171c; --chip-m: #2f7fd1; --chip-i: #7a4fc9;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1216; --panel: #171b21; --ink: #e8ebef; --muted: #98a1ae; --line: #2a3039;
+  --accent: #ff7a4a; --cool: #5aa6f0; --good: #3fbf7f; --bad: #f0605a; --warn: #e0a640;
+  --chip-c: #e8ebef; --chip-m: #5aa6f0; --chip-i: #a98af0; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1216; --panel: #171b21; --ink: #e8ebef; --muted: #98a1ae; --line: #2a3039;
+  --accent: #ff7a4a; --cool: #5aa6f0; --good: #3fbf7f; --bad: #f0605a; --warn: #e0a640;
+  --chip-c: #e8ebef; --chip-m: #5aa6f0; --chip-i: #a98af0; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5 }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 22px }
+header { display: grid; gap: 6px }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+h1 { font-family: var(--display); font-stretch: 118%; font-weight: 800; font-size: clamp(30px, 5vw, 50px); line-height: 1; margin: 0; text-wrap: balance }
+h1 span { color: var(--accent) }
+.lede { color: var(--muted); max-width: 70ch; margin: 0 }
+h2 { font-family: var(--display); font-stretch: 105%; font-size: 19px; margin: 0; text-wrap: balance }
+h3 { font-family: var(--display); font-size: 15px; margin: 0 }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden }
+.kpi { background: var(--panel); padding: 14px 16px; display: grid; gap: 2px; min-width: 0 }
+.kpi .k { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted) }
+.kpi .v { font-family: var(--display); font-stretch: 110%; font-weight: 700; font-size: 28px; font-variant-numeric: tabular-nums }
+.kpi .s { font-size: 13px; color: var(--muted) }
+.v.good { color: var(--good) } .v.bad { color: var(--bad) } .v.accent { color: var(--accent) }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 22px; align-items: start }
+@media (max-width: 960px) { .main { grid-template-columns: minmax(0, 1fr) } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; min-width: 0 }
+.maps { display: grid; grid-template-columns: 1fr 1fr; gap: 14px }
+@media (max-width: 620px) { .maps { grid-template-columns: 1fr } }
+.map { display: grid; gap: 6px; min-width: 0 }
+.maphead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap }
+.maphead b { font-family: var(--mono); font-size: 18px; font-variant-numeric: tabular-nums }
+canvas.heat { width: 100%; max-width: 100%; aspect-ratio: 1; display: block; border-radius: 6px; touch-action: none }
+canvas.heat.drag { cursor: grab }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap }
+.tabs button, .btn { font-family: var(--body); font-size: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 6px 11px; cursor: pointer }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink) }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600 }
+.btn:disabled { opacity: .5; cursor: default }
+button:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px }
+.legend { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 12px; color: var(--muted); flex-wrap: wrap }
+.cbar { height: 10px; flex: 1; min-width: 120px; border-radius: 3px }
+.key { display: inline-flex; align-items: center; gap: 5px }
+.key i { width: 11px; height: 11px; border: 2px solid; border-radius: 2px; display: inline-block }
+.steps { display: grid; gap: 10px }
+.step { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start }
+.step .n { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; font-family: var(--mono); font-size: 12px; color: var(--muted) }
+.step.active .n { border-color: var(--accent); color: var(--accent) }
+.step.done .n { background: var(--good); border-color: var(--good); color: #fff }
+.step p { margin: 2px 0 0; font-size: 13px; color: var(--muted) }
+.bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 6px }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+label.f { display: grid; gap: 3px; font-size: 12px; color: var(--muted); flex: 1; min-width: 90px }
+label.f select, label.f input { font: 14px var(--mono); padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); width: 100% }
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px }
+@media (max-width: 760px) { .charts { grid-template-columns: 1fr } }
+canvas.chart { width: 100%; height: 240px; display: block }
+.note { font-size: 13px; color: var(--muted) }
+.log { font-family: var(--mono); font-size: 12px; color: var(--muted); max-height: 150px; overflow: auto; white-space: pre-wrap; background: var(--bg); border-radius: 6px; padding: 8px }
+.method { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px }
+.method p, .method li { font-size: 14px; max-width: 65ch }
+.method ul { padding-left: 18px; margin: 6px 0 }
+.eq { font-family: var(--mono); font-size: 13px; background: var(--bg); padding: 8px 10px; border-radius: 6px; overflow-x: auto }
+table { border-collapse: collapse; font-size: 13px; width: 100% }
+td, th { text-align: left; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums }
+th { font-weight: 600; color: var(--muted); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .05em }
+.tblwrap { overflow-x: auto }
+.status { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line) }
+.status.ok { color: var(--good); border-color: var(--good) } .status.badv { color: var(--bad); border-color: var(--bad) }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none } }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Track 2 · 2.5D package · 40 × 40 mm interposer · 4 GPU dies, 8 HBM stacks, 1 I/O die</div>
+  <h1>Cool <span>Chiplets</span></h1>
+  <p class="lede">A finite-difference thermal solver generates training data, a neural surrogate learns peak temperature from the power map, and simulated annealing searches layouts on the surrogate while the solver verifies each round's winner and feeds it back for retraining.</p>
+</header>
+
+<section class="kpis" aria-label="Results">
+  <div class="kpi"><span class="k">Baseline T<sub>max</sub> (worst workload)</span><span class="v bad" id="k-base">–</span><span class="s">Conventional 2×2 + side HBM</span></div>
+  <div class="kpi"><span class="k">Optimized T<sub>max</sub></span><span class="v good" id="k-opt">–</span><span class="s" id="k-opt-s">Verified by full solver</span></div>
+  <div class="kpi"><span class="k">Temperature saved</span><span class="v accent" id="k-dt">–</span><span class="s">Junction limit 95 °C · coolant 35 °C</span></div>
+  <div class="kpi"><span class="k">Power headroom at 95 °C</span><span class="v" id="k-pw">–</span><span class="s" id="k-perf">Extra compute ≈ (P ratio)<sup>0.5</sup></span></div>
+  <div class="kpi"><span class="k">Surrogate accuracy</span><span class="v" id="k-sur">–</span><span class="s" id="k-sur-s">Held-out MAE · speedup vs solver</span></div>
+</section>
+
+<div class="main">
+  <section class="panel" aria-label="Thermal maps">
+    <div class="row" style="justify-content:space-between">
+      <h2>Junction temperature maps</h2>
+      <div class="tabs" role="group" aria-label="Workload">
+        <button id="wl-worst" aria-pressed="true">Worst case</button>
+        <button id="wl-train" aria-pressed="false">Training</button>
+        <button id="wl-prefill" aria-pressed="false">Prefill</button>
+        <button id="wl-decode" aria-pressed="false">Decode</button>
+      </div>
+    </div>
+    <div class="maps">
+      <div class="map"><div class="maphead"><h3>Baseline layout</h3><b id="t-base">–</b></div><canvas class="heat" id="cv-base" width="480" height="480"></canvas></div>
+      <div class="map"><div class="maphead"><h3 id="opt-title">Optimized layout</h3><span><span class="status" id="opt-valid">–</span> <b id="t-opt">–</b></span></div><canvas class="heat drag" id="cv-opt" width="480" height="480"></canvas></div>
+    </div>
+    <div class="legend"><span id="cb-lo">35 °C</span><canvas class="cbar" id="cbar" width="300" height="10"></canvas><span id="cb-hi">105 °C</span>
+      <span class="key"><i style="border-color:var(--chip-c)"></i>GPU</span><span class="key"><i style="border-color:var(--chip-m)"></i>HBM</span><span class="key"><i style="border-color:var(--chip-i)"></i>I/O</span></div>
+    <p class="note">Drag any chiplet on the right-hand map to try your own layout. The solver re-runs on release; red outlines mean a rule is broken (overlap, off-package, HBM more than 2 mm from a GPU, I/O more than 4 mm from a GPU). White ticks mark the hottest cell.</p>
+  </section>
+
+  <aside class="panel" aria-label="Pipeline">
+    <h2>Optimization pipeline</h2>
+    <div class="steps">
+      <div class="step" id="s1"><span class="n">1</span><div><h3>Generate training data</h3><p id="s1p">Random valid layouts × workloads through the FD solver.</p><div class="bar"><i id="b1"></i></div></div></div>
+      <div class="step" id="s2"><span class="n">2</span><div><h3>Train surrogate</h3><p id="s2p">MLP: 12×12 pooled power map + totals → T<sub>max</sub>.</p><div class="bar"><i id="b2"></i></div></div></div>
+      <div class="step" id="s3"><span class="n">3</span><div><h3>Optimize in the loop</h3><p id="s3p">Annealing on the surrogate, verify, retrain.</p><div class="bar"><i id="b3"></i></div></div></div>
+    </div>
+    <div class="row">
+      <label class="f">Samples<select id="o-n"><option>120</option><option selected>240</option><option>400</option></select></label>
+      <label class="f">Rounds<select id="o-r"><option>4</option><option selected>8</option><option>12</option></select></label>
+      <label class="f">Seed<input id="o-seed" type="number" value="11" min="1" max="9999"></label>
+    </div>
+    <div class="row"><button class="btn primary" id="run">Run pipeline</button><button class="btn" id="reset">Reset to optimized</button></div>
+    <div class="log" id="log" aria-live="polite"></div>
+  </aside>
+</div>
+
+<section class="charts">
+  <div class="panel"><div class="maphead"><h2>Surrogate parity</h2><span class="note" id="par-note">predicted vs solver, °C</span></div><canvas class="chart" id="cv-par"></canvas></div>
+  <div class="panel"><div class="maphead"><h2>Optimization loop</h2><span class="note">worst-case T<sub>max</sub> per round, °C</span></div><canvas class="chart" id="cv-conv"></canvas></div>
+</section>
+
+<section class="panel">
+  <h2>Model and assumptions</h2>
+  <div class="method">
+    <div>
+      <h3>Thermal solver (ground truth)</h3>
+      <p>Steady 2D conduction in the die + vapor-chamber lid on a 48 × 48 grid (0.83 mm cells), with vertical conduction through TIM and cold plate to 35 °C coolant. Edges are adiabatic. Solved by red-black SOR (ω = 1.92).</p>
+      <div class="eq">Σ<sub>nbr</sub> G<sub>lat</sub>(T<sub>n</sub> − T) − G<sub>v</sub>(T − T<sub>c</sub>) + P = 0<br>G<sub>lat</sub> = k·t = 12 W/K · G<sub>v</sub> = h·Δx² , h = 5×10⁴ W/m²K</div>
+      <p>GPU dies carry a hot shader core: the central 36% of area runs at 1.6× the die's edge power density.</p>
+    </div>
+    <div>
+      <h3>Surrogate and search</h3>
+      <ul>
+        <li>Input: power map average-pooled to 12 × 12 blocks, plus total and peak cell power (146 features). Permutation-free: it sees heat, not chiplet IDs.</li>
+        <li>Network: 146 → 48 → 24 → 1, leaky ReLU, Adam, trained in your browser.</li>
+        <li>Objective: max over the three workloads of predicted T<sub>max</sub> (robust design).</li>
+        <li>Moves: shift, rotate, swap; any move breaking a rule is rejected.</li>
+        <li>Active learning: each round runs three anneals; their winners are solved exactly for all workloads and added to the training set. This catches layouts that fool the surrogate (predicted cool, actually hot) and teaches it not to repeat the mistake.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Workload power (W per chiplet)</h3>
+      <div class="tblwrap"><table id="wl-table"><thead><tr><th>Workload</th><th>GPU</th><th>HBM</th><th>I/O</th><th>Package</th></tr></thead><tbody></tbody></table></div>
+      <p class="note">2035-class package around 4 kW. Headroom = (95 − 35) / (T<sub>max</sub> − 35), since temperature rise is linear in power. Throughput gain assumes DVFS where performance scales with the square root of power.</p>
+    </div>
+  </div>
+</section>
+</div>
+
+<script>
+// ===== Cool Chiplets core: thermal solver, layouts, surrogate, optimizer =====
+const PKG = 40;            // package size, mm
+const N = 48;              // grid cells per side
+const DX = PKG / N;        // mm per cell
+const T_COOL = 35;         // coolant / cold-plate temp, °C
+const T_LIMIT = 95;        // junction limit, °C
+const G_LAT = 12.0;        // lateral conductance per cell pair, W/K  (k_eff*t)
+const H_V = 5.0e4;         // effective vertical HTC to coolant, W/m²K (TIM+lid+cold plate)
+const G_V = H_V * (DX * 1e-3) ** 2;  // W/K per cell
+const HBM_GAP = 2.0;       // max edge-to-edge gap from each HBM to some compute die, mm
+
+const TYPES = {
+  C: { w: 11, h: 13, label: 'GPU', color: 'compute' },
+  M: { w: 6,  h: 8,  label: 'HBM', color: 'hbm' },
+  I: { w: 9,  h: 6,  label: 'I/O', color: 'io' },
+};
+
+// Watts per chiplet type for each workload
+const WORKLOADS = {
+  train:   { name: 'Training',  C: 810, M: 60, I: 140 },
+  prefill: { name: 'Prefill',   C: 900, M: 40, I: 110 },
+  decode:  { name: 'Decode',    C: 435, M: 95, I: 175 },
+};
+
+function baselineLayout() {
+  // Conventional 2.5D layout: 2x2 GPU dies in the middle, 4 HBM stacks per side, I/O die below
+  const L = [], g = 0.6, x0 = PKG / 2 - 11 - g / 2, y0 = 3.0;
+  for (const [dx, dy] of [[0, 0], [11 + g, 0], [0, 13 + g], [11 + g, 13 + g]]) L.push({ t: 'C', x: x0 + dx, y: y0 + dy, r: 0 });
+  const lx = x0 - 1.0 - 6, rx = x0 + 22 + g + 1.0;
+  for (let k = 0; k < 4; k++) { const y = 1.5 + k * 8.5; L.push({ t: 'M', x: lx, y, r: 0 }); L.push({ t: 'M', x: rx, y, r: 0 }); }
+  L.push({ t: 'I', x: PKG / 2 - 4.5, y: y0 + 26 + g + 1.2, r: 0 });
+  return L;
+}
+
+function dims(c) { const T = TYPES[c.t]; return c.r ? [T.h, T.w] : [T.w, T.h]; }
+
+function inBounds(c) { const [w, h] = dims(c); return c.x >= 0.5 && c.y >= 0.5 && c.x + w <= PKG - 0.5 && c.y + h <= PKG - 0.5; }
+
+function rectGap(a, b) {
+  const [aw, ah] = dims(a), [bw, bh] = dims(b);
+  const dx = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + aw, b.x + bw));
+  const dy = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + ah, b.y + bh));
+  return Math.hypot(dx, dy);
+}
+function overlaps(a, b, clear = 0.4) {
+  const [aw, ah] = dims(a), [bw, bh] = dims(b);
+  return a.x < b.x + bw + clear && b.x < a.x + aw + clear && a.y < b.y + bh + clear && b.y < a.y + ah + clear;
+}
+
+function violations(L) {
+  let v = 0;
+  for (let i = 0; i < L.length; i++) {
+    if (!inBounds(L[i])) v++;
+    for (let j = i + 1; j < L.length; j++) if (overlaps(L[i], L[j])) v++;
+  }
+  for (const m of L) if (m.t === 'M') {
+    let best = 1e9; for (const c of L) if (c.t === 'C') best = Math.min(best, rectGap(m, c));
+    if (best > HBM_GAP) v++;
+  }
+  // I/O die must sit within 4 mm of a compute die (fabric link)
+  for (const io of L) if (io.t === 'I') {
+    let k = 0; for (const c of L) if (c.t === 'C' && rectGap(io, c) <= 4) k++;
+    if (k < 1) v++;
+  }
+  return v;
+}
+
+function powerMap(L, wl) {
+  const P = new Float64Array(N * N);
+  const W = WORKLOADS[wl];
+  for (const c of L) {
+    const [w, h] = dims(c);
+    const tot = W[c.t];
+    // rasterize with fractional coverage
+    const i0 = Math.floor(c.x / DX), i1 = Math.ceil((c.x + w) / DX);
+    const j0 = Math.floor(c.y / DX), j1 = Math.ceil((c.y + h) / DX);
+    const dens = tot / (w * h); // W/mm²
+    for (let j = Math.max(0, j0); j < Math.min(N, j1); j++) {
+      const oy = Math.min((j + 1) * DX, c.y + h) - Math.max(j * DX, c.y);
+      if (oy <= 0) continue;
+      for (let i = Math.max(0, i0); i < Math.min(N, i1); i++) {
+        const ox = Math.min((i + 1) * DX, c.x + w) - Math.max(i * DX, c.x);
+        if (ox <= 0) continue;
+        let d = dens;
+        // GPU dies have a hot shader-array core: 40% more density in central 60%
+        if (c.t === 'C') {
+          const u = ((i + 0.5) * DX - c.x) / w, vv = ((j + 0.5) * DX - c.y) / h;
+          const core = (u > 0.2 && u < 0.8 && vv > 0.2 && vv < 0.8);
+          d = dens * (core ? 1.316 : 0.822); // 36% of area at 1.6x density; die total preserved
+        }
+        P[j * N + i] += d * ox * oy;
+      }
+    }
+  }
+  return P;
+}
+
+// Steady-state: sum_n G_LAT (T_n - T) - G_V (T - Tc) + P = 0. Red-black SOR on θ = T - Tc
+function solve(P, warm) {
+  const th = warm ? Float64Array.from(warm) : new Float64Array(N * N);
+  const w = 1.92;
+  let it;
+  for (it = 0; it < 4000; it++) {
+    let maxd = 0;
+    for (let color = 0; color < 2; color++) {
+      for (let j = 0; j < N; j++) {
+        for (let i = (j + color) & 1; i < N; i += 2) {
+          const k = j * N + i;
+          let s = 0, g = G_V;
+          if (i > 0) { s += th[k - 1]; g += G_LAT; }
+          if (i < N - 1) { s += th[k + 1]; g += G_LAT; }
+          if (j > 0) { s += th[k - N]; g += G_LAT; }
+          if (j < N - 1) { s += th[k + N]; g += G_LAT; }
+          const nv = (G_LAT * s + P[k]) / g;
+          const d = nv - th[k];
+          th[k] += w * d;
+          if (Math.abs(d) > maxd) maxd = Math.abs(d);
+        }
+      }
+    }
+    if (maxd < 1e-3) break;
+  }
+  let mx = 0; for (let k = 0; k < N * N; k++) if (th[k] > mx) mx = th[k];
+  return { T: th, tmax: mx + T_COOL, iters: it };
+}
+
+const ALL_WL = ['train', 'prefill', 'decode'];
+function evalTrue(L) {
+  let worst = -1, per = {};
+  for (const wl of ALL_WL) { const r = solve(powerMap(L, wl)); per[wl] = r.tmax; if (r.tmax > worst) worst = r.tmax; }
+  return { worst, per };
+}
+
+// ---- features for surrogate: 12x12 avg-pooled power map (W per block) + a few globals
+const FS = 12, POOL = N / FS;
+function features(P) {
+  const f = new Float64Array(FS * FS + 2);
+  let tot = 0, mx = 0;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const v = P[j * N + i];
+    f[((j / POOL) | 0) * FS + ((i / POOL) | 0)] += v; tot += v; if (v > mx) mx = v;
+  }
+  for (let k = 0; k < FS * FS; k++) f[k] = f[k] / 30; // scale
+  f[FS * FS] = tot / 1500; f[FS * FS + 1] = mx / 3;
+  return f;
+}
+
+// ---- tiny MLP with Adam
+function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+function makeMLP(sizes, rand) {
+  const L = [];
+  for (let l = 0; l < sizes.length - 1; l++) {
+    const a = sizes[l], b = sizes[l + 1], sc = Math.sqrt(2 / a);
+    const W = new Float64Array(a * b); for (let k = 0; k < W.length; k++) W[k] = (rand() * 2 - 1) * sc * 0.9;
+    L.push({ a, b, W, B: new Float64Array(b), mW: new Float64Array(a * b), vW: new Float64Array(a * b), mB: new Float64Array(b), vB: new Float64Array(b), gW: new Float64Array(a * b), gB: new Float64Array(b) });
+  }
+  return { L, t: 0, ymu: 0, ysd: 1 };
+}
+const act = x => x > 0 ? x : 0.05 * x, dact = x => x > 0 ? 1 : 0.05;
+function forward(net, x, keep) {
+  let h = x; const zs = [], hs = [x];
+  for (let l = 0; l < net.L.length; l++) {
+    const { a, b, W, B } = net.L[l]; const z = new Float64Array(b);
+    for (let o = 0; o < b; o++) { let s = B[o]; const off = o * a; for (let i = 0; i < a; i++) s += W[off + i] * h[i]; z[o] = s; }
+    const last = l === net.L.length - 1;
+    const hn = last ? z : z.map(act);
+    zs.push(z); hs.push(hn); h = hn;
+  }
+  return keep ? { y: h[0], zs, hs } : h[0];
+}
+function predict(net, x) { return forward(net, x) * net.ysd + net.ymu; }
+function trainEpochs(net, X, Y, epochs, lr = 2e-3, bs = 32, rand = Math.random) {
+  const n = X.length; let mu = 0; for (const y of Y) mu += y; mu /= n;
+  let sd = 0; for (const y of Y) sd += (y - mu) ** 2; sd = Math.sqrt(sd / n) || 1;
+  net.ymu = mu; net.ysd = sd;
+  const idx = [...Array(n).keys()]; let loss = 0;
+  for (let e = 0; e < epochs; e++) {
+    for (let i = n - 1; i > 0; i--) { const j = (rand() * (i + 1)) | 0; [idx[i], idx[j]] = [idx[j], idx[i]]; }
+    loss = 0;
+    for (let s = 0; s < n; s += bs) {
+      for (const l of net.L) { l.gW.fill(0); l.gB.fill(0); }
+      const end = Math.min(n, s + bs);
+      for (let q = s; q < end; q++) {
+        const k = idx[q]; const f = forward(net, X[k], true);
+        const t = (Y[k] - mu) / sd; let d = new Float64Array([f.y - t]); loss += d[0] * d[0];
+        for (let l = net.L.length - 1; l >= 0; l--) {
+          const lay = net.L[l], hin = f.hs[l];
+          if (l < net.L.length - 1) for (let o = 0; o < lay.b; o++) d[o] *= dact(f.zs[l][o]);
+          const dn = new Float64Array(lay.a);
+          for (let o = 0; o < lay.b; o++) {
+            lay.gB[o] += d[o]; const off = o * lay.a;
+            for (let i = 0; i < lay.a; i++) { lay.gW[off + i] += d[o] * hin[i]; dn[i] += lay.W[off + i] * d[o]; }
+          }
+          d = dn;
+        }
+      }
+      net.t++; const b1 = 0.9, b2 = 0.999, m = end - s;
+      const c1 = 1 - b1 ** net.t, c2 = 1 - b2 ** net.t;
+      for (const l of net.L) {
+        for (let k = 0; k < l.W.length; k++) {
+          const g = l.gW[k] / m + 1e-5 * l.W[k];
+          l.mW[k] = b1 * l.mW[k] + (1 - b1) * g; l.vW[k] = b2 * l.vW[k] + (1 - b2) * g * g;
+          l.W[k] -= lr * (l.mW[k] / c1) / (Math.sqrt(l.vW[k] / c2) + 1e-8);
+        }
+        for (let k = 0; k < l.B.length; k++) {
+          const g = l.gB[k] / m;
+          l.mB[k] = b1 * l.mB[k] + (1 - b1) * g; l.vB[k] = b2 * l.vB[k] + (1 - b2) * g * g;
+          l.B[k] -= lr * (l.mB[k] / c1) / (Math.sqrt(l.vB[k] / c2) + 1e-8);
+        }
+      }
+    }
+  }
+  return Math.sqrt(loss / n) * sd;
+}
+
+function cloneL(L) { return L.map(c => ({ ...c })); }
+function randomMove(L, rand, scale = 3) {
+  const M = cloneL(L); const k = (rand() * M.length) | 0; const r = rand();
+  if (r < 0.75) { M[k].x += (rand() * 2 - 1) * scale; M[k].y += (rand() * 2 - 1) * scale; }
+  else if (r < 0.9) { if (M[k].t !== 'C') M[k].r ^= 1; else { M[k].x += (rand() * 2 - 1) * scale; } }
+  else { // swap positions of two different chiplets (by centers)
+    const q = (rand() * M.length) | 0; if (q !== k) {
+      const [aw, ah] = dims(M[k]), [bw, bh] = dims(M[q]);
+      const ac = [M[k].x + aw / 2, M[k].y + ah / 2], bc = [M[q].x + bw / 2, M[q].y + bh / 2];
+      M[k].x = bc[0] - aw / 2; M[k].y = bc[1] - ah / 2; M[q].x = ac[0] - bw / 2; M[q].y = ac[1] - bh / 2;
+    }
+  }
+  return M;
+}
+function randomValidLayout(base, rand, steps) {
+  let L = cloneL(base);
+  for (let s = 0; s < steps; s++) { const M = randomMove(L, rand, 4); if (violations(M) === 0) L = M; }
+  return L;
+}
+
+// Constructive random layout: scatter GPUs, hang each HBM on a random GPU edge, put I/O between two GPUs
+function constructLayout(rand) {
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const L = [];
+    let ok = true;
+    // GPUs: a jittered 2x2 grid with random gaps (keeps die-to-die fabric short)
+    const gx = 0.6 + rand() * 9, gy = 0.6 + rand() * 9;
+    const bw = 22 + gx, bh = 26 + gy;
+    const ox = 0.5 + rand() * Math.max(0, PKG - 1 - bw), oy = 0.5 + rand() * Math.max(0, PKG - 1 - bh);
+    for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const c = { t: 'C', r: 0, x: ox + cx * (11 + gx) + (rand() - 0.5) * 3, y: oy + cy * (13 + gy) + (rand() - 0.5) * 3 };
+      c.x = Math.min(Math.max(c.x, 0.5), PKG - 11.5); c.y = Math.min(Math.max(c.y, 0.5), PKG - 13.5);
+      if (L.some(o => overlaps(o, c, 0.6))) { ok = false; break; }
+      L.push(c);
+    }
+    if (!ok) continue;
+    for (let k = 0; k < 8 && ok; k++) {
+      let placed = false;
+      for (let a = 0; a < 300; a++) {
+        const g = L[(rand() * 4) | 0]; const [gw, gh] = dims(g);
+        const m = { t: 'M', r: rand() < 0.5 ? 1 : 0, x: 0, y: 0 }; const [w, h] = dims(m);
+        const side = (rand() * 4) | 0, gap = 0.5 + rand() * 1.2;
+        if (side === 0) { m.x = g.x - gap - w; m.y = g.y - h / 2 + rand() * gh; }
+        else if (side === 1) { m.x = g.x + gw + gap; m.y = g.y - h / 2 + rand() * gh; }
+        else if (side === 2) { m.y = g.y - gap - h; m.x = g.x - w / 2 + rand() * gw; }
+        else { m.y = g.y + gh + gap; m.x = g.x - w / 2 + rand() * gw; }
+        if (inBounds(m) && L.every(o => !overlaps(o, m))) { L.push(m); placed = true; break; }
+      }
+      ok = placed;
+    }
+    if (!ok) continue;
+    let placed = false;
+    for (let a = 0; a < 600; a++) {
+      const io = { t: 'I', r: rand() < 0.5 ? 1 : 0, x: 0.5 + rand() * 30, y: 0.5 + rand() * 33 };
+      if (inBounds(io) && L.every(o => !overlaps(o, io))) { L.push(io); if (violations(L) === 0) { placed = true; break; } L.pop(); }
+    }
+    if (placed) return L;
+  }
+  return baselineLayout();
+}
+
+
+
+// ================= UI =================
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const state = { wl: 'worst', base: null, baseRes: null, opt: null, optRes: null, X: [], Y: [], test: [], net: null, hist: [], running: false };
+
+// inferno-like colormap
+const CMAP = [[0,0,4],[40,11,84],[101,21,110],[159,42,99],[212,72,66],[245,125,21],[250,193,39],[252,255,164]];
+function cmap(t) { t = Math.min(1, Math.max(0, t)) * (CMAP.length - 1); const i = Math.min(CMAP.length - 2, Math.floor(t)), f = t - i;
+  const a = CMAP[i], b = CMAP[i + 1]; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]; }
+const TLO = 35, THI = 105;
+
+function fields(L) { // returns per-workload field + worst field (cellwise max)
+  const out = {}; let worst = null, wmax = -1, wkey = null;
+  for (const wl of ALL_WL) { const r = solve(powerMap(L, wl)); out[wl] = r; if (r.tmax > wmax) { wmax = r.tmax; wkey = wl; } }
+  out.worst = out[wkey]; out.worstKey = wkey; return out;
+}
+
+function drawMap(cv, L, res) {
+  const ctx = cv.getContext('2d'), S = cv.width, cs = S / N;
+  const r = res[state.wl]; const T = r.T;
+  const img = ctx.createImageData(N, N);
+  for (let k = 0; k < N * N; k++) { const c = cmap((T[k] + T_COOL - TLO) / (THI - TLO)); img.data[4*k] = c[0]; img.data[4*k+1] = c[1]; img.data[4*k+2] = c[2]; img.data[4*k+3] = 255; }
+  const off = document.createElement('canvas'); off.width = N; off.height = N; off.getContext('2d').putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true; ctx.clearRect(0, 0, S, S); ctx.drawImage(off, 0, 0, S, S);
+  const sc = S / PKG; const bad = badSet(L);
+  L.forEach((c, i) => { const [w, h] = dims(c);
+    ctx.lineWidth = 2.2; ctx.strokeStyle = bad.has(i) ? '#ff3b30' : (c.t === 'C' ? 'rgba(255,255,255,.9)' : c.t === 'M' ? '#7cc4ff' : '#c9b2ff');
+    ctx.strokeRect(c.x * sc, c.y * sc, w * sc, h * sc);
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = `${Math.max(9, S/40)}px JetBrains Mono, monospace`;
+    ctx.fillText(TYPES[c.t].label, c.x * sc + 4, c.y * sc + Math.max(11, S/34)); });
+  let km = 0; for (let k = 1; k < N * N; k++) if (T[k] > T[km]) km = k;
+  const hx = (km % N + .5) * cs, hy = (Math.floor(km / N) + .5) * cs;
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(hx - 9, hy); ctx.lineTo(hx - 3, hy); ctx.moveTo(hx + 3, hy); ctx.lineTo(hx + 9, hy); ctx.moveTo(hx, hy - 9); ctx.lineTo(hx, hy - 3); ctx.moveTo(hx, hy + 3); ctx.lineTo(hx, hy + 9); ctx.stroke();
+  return r.tmax;
+}
+function badSet(L) { const s = new Set();
+  L.forEach((a, i) => {
+    const [w,h] = dims(a); if (a.x < .5 || a.y < .5 || a.x + w > PKG - .5 || a.y + h > PKG - .5) s.add(i);
+    L.forEach((b, j) => { if (i !== j && overlaps(a, b)) s.add(i); });
+    if (a.t === 'M' || a.t === 'I') { const lim = a.t === 'M' ? 2.0 : 4.0; let best = 1e9; for (const c of L) if (c.t === 'C') best = Math.min(best, gapOf(a, c)); if (best > lim) s.add(i); } });
+  return s; }
+function gapOf(a, b) { const [aw, ah] = dims(a), [bw, bh] = dims(b);
+  const dx = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + aw, b.x + bw)), dy = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + ah, b.y + bh)); return Math.hypot(dx, dy); }
+
+function fmt(t) { return t.toFixed(1) + ' °C'; }
+function render() {
+  const tb = drawMap($('cv-base'), state.base, state.baseRes);
+  $('t-base').textContent = fmt(tb) + (state.wl === 'worst' ? ` · ${WORKLOADS[state.baseRes.worstKey].name}` : '');
+  if (state.opt) {
+    const to = drawMap($('cv-opt'), state.opt, state.optRes);
+    $('t-opt').textContent = fmt(to) + (state.wl === 'worst' ? ` · ${WORKLOADS[state.optRes.worstKey].name}` : '');
+    const v = violations(state.opt) === 0; const st = $('opt-valid'); st.textContent = v ? 'valid' : 'rule broken'; st.className = 'status ' + (v ? 'ok' : 'badv');
+  }
+  kpis();
+}
+function kpis() {
+  const b = state.baseRes.worst.tmax; $('k-base').textContent = fmt(b);
+  if (!state.optRes) return;
+  const o = state.optRes.worst.tmax; const valid = violations(state.opt) === 0;
+  $('k-opt').textContent = fmt(o); $('k-opt').className = 'v ' + (o <= T_LIMIT ? 'good' : 'bad');
+  $('k-opt-s').textContent = valid ? (o <= T_LIMIT ? 'Under the 95 °C limit · verified' : 'Still above 95 °C') : 'Layout breaks a rule';
+  $('k-dt').textContent = (b - o >= 0 ? '−' : '+') + Math.abs(b - o).toFixed(1) + ' K';
+  const hb = (T_LIMIT - T_COOL) / (b - T_COOL), ho = (T_LIMIT - T_COOL) / (o - T_COOL);
+  const gain = ho / hb; $('k-pw').textContent = (gain >= 1 ? '+' : '') + ((gain - 1) * 100).toFixed(0) + '%';
+  $('k-perf').textContent = `≈ ${((Math.sqrt(gain) - 1) * 100).toFixed(1)}% more compute per GPU at the same 95 °C`;
+}
+
+// ---- charts
+function setupCanvas(cv) { const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1; cv.width = Math.max(10, r.width * d); cv.height = Math.max(10, r.height * d); const ctx = cv.getContext('2d'); ctx.setTransform(d, 0, 0, d, 0, 0); return [ctx, r.width, r.height]; }
+function axes(ctx, W, H, x0, x1, y0, y1, xl, yl, pad) {
+  ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--muted'); ctx.font = '11px JetBrains Mono, monospace'; ctx.lineWidth = 1;
+  const X = v => pad.l + (v - x0) / (x1 - x0) * (W - pad.l - pad.r), Y = v => H - pad.b - (v - y0) / (y1 - y0) * (H - pad.t - pad.b);
+  const ys = niceTicks(y0, y1, 5); ys.forEach(v => { ctx.beginPath(); ctx.moveTo(pad.l, Y(v)); ctx.lineTo(W - pad.r, Y(v)); ctx.stroke(); ctx.textAlign = 'right'; ctx.fillText(v.toFixed(0), pad.l - 6, Y(v) + 4); });
+  const xs = niceTicks(x0, x1, 6); xs.forEach(v => { ctx.textAlign = 'center'; ctx.fillText(v.toFixed(0), X(v), H - pad.b + 15); });
+  ctx.textAlign = 'center'; ctx.fillText(xl, pad.l + (W - pad.l - pad.r) / 2, H - 4);
+  ctx.save(); ctx.translate(11, pad.t + (H - pad.t - pad.b) / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(yl, 0, 0); ctx.restore();
+  return [X, Y];
+}
+function niceTicks(a, b, n) { const step0 = (b - a) / n, p = Math.pow(10, Math.floor(Math.log10(step0))); const m = step0 / p; const step = (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+  const out = []; for (let v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) out.push(v); return out; }
+function drawParity() {
+  const [ctx, W, H] = setupCanvas($('cv-par')); ctx.clearRect(0, 0, W, H);
+  const pts = state.test; const pad = { l: 40, r: 12, t: 10, b: 34 };
+  let lo = 60, hi = 110; if (pts.length) { lo = Math.floor(Math.min(...pts.map(p => Math.min(p[0], p[1]))) / 5) * 5; hi = Math.ceil(Math.max(...pts.map(p => Math.max(p[0], p[1]))) / 5) * 5; }
+  const [X, Y] = axes(ctx, W, H, lo, hi, lo, hi, 'solver T_max (°C)', 'surrogate', pad);
+  ctx.strokeStyle = css('--muted'); ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(X(lo), Y(lo)); ctx.lineTo(X(hi), Y(hi)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = css('--cool'); ctx.globalAlpha = .75; pts.forEach(p => { ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), 3, 0, 7); ctx.fill(); }); ctx.globalAlpha = 1;
+  if (!pts.length) { ctx.fillStyle = css('--muted'); ctx.textAlign = 'center'; ctx.font = '13px Source Sans 3, sans-serif'; ctx.fillText('Held-out points appear after training', W / 2, H / 2); }
+}
+function drawConv() {
+  const [ctx, W, H] = setupCanvas($('cv-conv')); ctx.clearRect(0, 0, W, H);
+  const h = state.hist; const pad = { l: 40, r: 12, t: 10, b: 34 };
+  const vals = h.flatMap(r => [r.sur, r.tru, r.best]).concat([state.baseRes.worst.tmax, T_LIMIT]);
+  const lo = Math.floor(Math.min(...vals) - 1), hi = Math.ceil(Math.max(...vals) + 1);
+  const n = Math.max(4, h.length);
+  const [X, Y] = axes(ctx, W, H, 0, n, lo, hi, 'round', '°C', pad);
+  const hline = (v, c, lbl) => { ctx.strokeStyle = c; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(X(0), Y(v)); ctx.lineTo(X(n), Y(v)); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = c; ctx.textAlign = 'right'; ctx.fillText(lbl, X(n) - 2, Y(v) - 4); };
+  hline(T_LIMIT, css('--warn'), '95 °C limit'); hline(state.baseRes.worst.tmax, css('--bad'), 'baseline');
+  const line = (key, c, dots) => { if (!h.length) return; ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); h.forEach((r, i) => { const x = X(i + 1), y = Y(r[key]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
+    if (dots) { ctx.fillStyle = c; h.forEach((r, i) => { ctx.beginPath(); ctx.arc(X(i + 1), Y(r[key]), 3, 0, 7); ctx.fill(); }); } ctx.lineWidth = 1; };
+  line('sur', css('--cool'), true); line('tru', css('--muted'), true); line('best', css('--good'), false);
+  ctx.font = '11px JetBrains Mono, monospace'; ctx.textAlign = 'left';
+  [['surrogate', '--cool'], ['solver check', '--muted'], ['best verified', '--good']].forEach(([t, c], i) => { ctx.fillStyle = css(c); ctx.fillRect(pad.l + 8 + i * 110, pad.t + 4, 10, 3); ctx.fillText(t, pad.l + 22 + i * 110, pad.t + 9); });
+}
+
+// ---- pipeline
+const tick = () => new Promise(r => setTimeout(r, 0));
+function log(s) { const el = $('log'); el.textContent += s + '\n'; el.scrollTop = el.scrollHeight; }
+function stepState(i, cls) { $('s' + i).className = 'step ' + cls; }
+
+async function run() {
+  if (state.running) return; state.running = true; $('run').disabled = true; $('log').textContent = '';
+  const nS = +$('o-n').value, rounds = +$('o-r').value, rand = rng(+$('o-seed').value || 11);
+  [1, 2, 3].forEach(i => { stepState(i, ''); $('b' + i).style.width = '0'; });
+  state.hist = []; state.test = []; drawConv(); drawParity();
+  // 1. data
+  stepState(1, 'active'); const X = [], Y = [], Ls = []; let t0 = performance.now(), solveMs = 0;
+  for (let i = 0; i < nS; i++) {
+    const L = i % 4 === 0 ? randomValidLayout(baselineLayout(), rand, 60) : constructLayout(rand);
+    const wl = ALL_WL[i % 3]; const P = powerMap(L, wl); const ts = performance.now(); const r = solve(P); solveMs += performance.now() - ts;
+    X.push(features(P)); Y.push(r.tmax); Ls.push(L);
+    if (i % 6 === 5) { $('b1').style.width = (100 * (i + 1) / nS) + '%'; $('s1p').textContent = `${i + 1} / ${nS} solves`; await tick(); }
+  }
+  const perSolve = solveMs / nS;
+  $('b1').style.width = '100%'; stepState(1, 'done');
+  $('s1p').textContent = `${nS} solves · ${perSolve.toFixed(0)} ms each · T_max ${Math.min(...Y).toFixed(0)}–${Math.max(...Y).toFixed(0)} °C`;
+  log(`data: ${nS} FD solves in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  // 2. train (80/20 split)
+  stepState(2, 'active'); const nTr = Math.floor(nS * 0.8);
+  const net = makeMLP([X[0].length, 48, 24, 1], rng(5)); state.net = net;
+  const Xtr = X.slice(0, nTr), Ytr = Y.slice(0, nTr); const EP = 140; let rm = 0;
+  for (let e = 0; e < EP; e += 5) { rm = trainEpochs(net, Xtr, Ytr, 5, 2e-3, 32, rand); $('b2').style.width = (100 * (e + 5) / EP) + '%'; await tick(); }
+  let ae = 0; const tp = [];
+  const ts = performance.now(); for (let i = nTr; i < nS; i++) { const p = predict(net, X[i]); tp.push([Y[i], p]); ae += Math.abs(p - Y[i]); }
+  const predMs = (performance.now() - ts) / (nS - nTr);
+  const mae = ae / (nS - nTr); state.test = tp; drawParity();
+  const ybar = tp.reduce((s, p) => s + p[0], 0) / tp.length; const ssr = tp.reduce((s, p) => s + (p[0] - p[1]) ** 2, 0), sst = tp.reduce((s, p) => s + (p[0] - ybar) ** 2, 0);
+  const r2 = 1 - ssr / sst;
+  $('k-sur').textContent = mae.toFixed(2) + ' K'; $('k-sur-s').textContent = `R² ${r2.toFixed(3)} · ~${Math.round(perSolve / Math.max(predMs, 1e-3)).toLocaleString()}× faster than the solver`;
+  $('par-note').textContent = `held-out n=${tp.length} · MAE ${mae.toFixed(2)} K · R² ${r2.toFixed(3)}`;
+  stepState(2, 'done'); $('s2p').textContent = `train RMSE ${rm.toFixed(2)} K · test MAE ${mae.toFixed(2)} K`;
+  log(`surrogate: test MAE ${mae.toFixed(2)} K, R² ${r2.toFixed(3)}`);
+  // 3. loop — start from best seen layout in data
+  stepState(3, 'active');
+  const sur = L => { let m = -1; for (const w of ALL_WL) { const v = predict(net, features(powerMap(L, w))); if (v > m) m = v; } return m; };
+  let bestL = baselineLayout(), bestT = state.baseRes.worst.tmax;
+  // quick pre-screen of data layouts with surrogate (cheap), verify top 3
+  const scored = Ls.map(L => [sur(L), L]).sort((a, b) => a[0] - b[0]).slice(0, 3);
+  for (const [, L] of scored) { const tv = evalTrue(L).worst; if (tv < bestT) { bestT = tv; bestL = L; } }
+  log(`start: best of data set verified at ${bestT.toFixed(1)} °C`);
+  const IT = 2000;
+  for (let r = 0; r < rounds; r++) {
+    // three short anneals per round from the best verified layout (trust region shrinks as rounds go on)
+    const cands = []; const sub = IT / 3, reach = 0.6 + 2.4 * (1 - r / rounds);
+    for (let c = 0; c < 3; c++) {
+      let L = cloneL(bestL), f = sur(L), bL = L, bf = f;
+      for (let it = 0; it < sub; it++) {
+        const T = 1.5 * (1 - it / sub) + 0.02; const M = randomMove(L, rand, reach * (1 - 0.6 * it / sub));
+        if (violations(M)) continue; const g = sur(M);
+        if (g < f || rand() < Math.exp((f - g) / T)) { L = M; f = g; if (f < bf) { bf = f; bL = M; } }
+        if (it % 200 === 199) { $('b3').style.width = (100 * (r + (c * sub + it + 1) / IT) / rounds) + '%'; await tick(); }
+      }
+      cands.push([bf, bL]);
+    }
+    let tr = null, bf = 0;
+    for (const [sf, cL] of cands) {
+      const t = evalTrue(cL);
+      for (const w of ALL_WL) { const P = powerMap(cL, w); X.push(features(P)); Y.push(t.per[w]); }
+      if (!tr || t.worst < tr.worst) { tr = t; bf = sf; tr.L = cL; }
+    }
+    trainEpochs(net, X, Y, 12, 1e-3, 32, rand);
+    if (tr.worst < bestT) { bestT = tr.worst; bestL = tr.L; }
+    state.hist.push({ sur: bf, tru: tr.worst, best: bestT });
+    state.opt = cloneL(bestL); state.optRes = fields(state.opt); state.bestOpt = cloneL(bestL);
+    render(); drawConv();
+    log(`round ${r + 1}: surrogate ${bf.toFixed(1)} → solver ${tr.worst.toFixed(1)} °C · best ${bestT.toFixed(1)} °C`);
+    $('s3p').textContent = `round ${r + 1}/${rounds} · best ${bestT.toFixed(1)} °C`;
+    await tick();
+  }
+  $('b3').style.width = '100%'; stepState(3, 'done');
+  $('s3p').textContent = `${rounds} rounds · ${(rounds * IT * 3).toLocaleString()} surrogate calls · ${rounds * 9} solver checks · best ${bestT.toFixed(1)} °C`;
+  state.running = false; $('run').disabled = false;
+}
+
+// ---- drag to edit
+(function drag() {
+  const cv = $('cv-opt'); let sel = -1, off = [0, 0];
+  const pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * PKG, (e.clientY - r.top) / r.height * PKG]; };
+  cv.addEventListener('pointerdown', e => { if (!state.opt || state.running) return; const [x, y] = pos(e);
+    sel = state.opt.findIndex(c => { const [w, h] = dims(c); return x >= c.x && x <= c.x + w && y >= c.y && y <= c.y + h; });
+    if (sel >= 0) { off = [x - state.opt[sel].x, y - state.opt[sel].y]; cv.setPointerCapture(e.pointerId); } });
+  cv.addEventListener('pointermove', e => { if (sel < 0) return; const [x, y] = pos(e); state.opt[sel].x = x - off[0]; state.opt[sel].y = y - off[1];
+    const ctx = cv.getContext('2d'); drawMap(cv, state.opt, state.optRes); });
+  cv.addEventListener('pointerup', () => { if (sel < 0) return; sel = -1; state.optRes = fields(state.opt); $('opt-title').textContent = 'Your layout'; render(); });
+  cv.addEventListener('dblclick', e => { if (!state.opt || state.running) return; const [x, y] = pos(e);
+    const i = state.opt.findIndex(c => { const [w, h] = dims(c); return x >= c.x && x <= c.x + w && y >= c.y && y <= c.y + h; });
+    if (i >= 0) { state.opt[i].r ^= 1; state.optRes = fields(state.opt); $('opt-title').textContent = 'Your layout'; render(); } });
+})();
+
+function setWl(w) { state.wl = w; ['worst', ...ALL_WL].forEach(k => $('wl-' + k).setAttribute('aria-pressed', String(k === w))); render(); }
+['worst', ...ALL_WL].forEach(k => $('wl-' + k).addEventListener('click', () => setWl(k)));
+$('run').addEventListener('click', run);
+$('reset').addEventListener('click', () => { if (!state.bestOpt || state.running) return; state.opt = cloneL(state.bestOpt); state.optRes = fields(state.opt); $('opt-title').textContent = 'Optimized layout'; render(); });
+
+function init() {
+  const tb = $('wl-table').querySelector('tbody');
+  for (const k of ALL_WL) { const w = WORKLOADS[k]; const tot = 4 * w.C + 8 * w.M + w.I; tb.insertAdjacentHTML('beforeend', `<tr><td>${w.name}</td><td>${w.C}</td><td>${w.M}</td><td>${w.I}</td><td>${(tot / 1000).toFixed(2)} kW</td></tr>`); }
+  const cb = $('cbar').getContext('2d'); for (let x = 0; x < 300; x++) { const c = cmap(x / 299); cb.fillStyle = `rgb(${c.map(Math.round).join(',')})`; cb.fillRect(x, 0, 1, 10); }
+  $('cb-lo').textContent = TLO + ' °C'; $('cb-hi').textContent = THI + ' °C';
+  state.base = baselineLayout(); state.baseRes = fields(state.base);
+  state.opt = cloneL(state.base); state.optRes = state.baseRes; $('opt-title').textContent = 'Optimized layout (running…)';
+  render(); drawParity(); drawConv();
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawParity(); drawConv(); }, 150); });
+  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { drawParity(); drawConv(); });
+  setTimeout(async () => { await run(); $('opt-title').textContent = 'Optimized layout'; }, 200);
+}
+init();
+</script>
+
+</body>
+</html>
