@@ -95,6 +95,11 @@ th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; lette
 .score { font-family: var(--display); font-weight: 800; font-size: 44px; line-height: 1; color: var(--copper) }
 #pl-demand a { color: var(--water) }
 td input.num { width: 80px; font: 13px var(--mono); padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); text-align: right }
+.hero-links { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.btn-3d { display: inline-flex; align-items: center; gap: 8px; font: 700 15px var(--body); color: #fff; background: var(--copper); border: 1px solid var(--copper); border-radius: 8px; padding: 10px 16px; text-decoration: none; }
+.btn-3d:hover { filter: brightness(1.08); }
+.btn-3d:focus-visible { outline: 2px solid var(--water); outline-offset: 2px; }
+.hero-hint { font-size: 13px; color: var(--muted); }
 </style>
 
 <div class="wrap">
@@ -102,6 +107,10 @@ td input.num { width: 80px; font: 13px var(--mono); padding: 3px 5px; border: 1p
   <div class="eyebrow">Track 1 · SundAI × MIT AI Hackathon · fleet + plant digital twin · Cambridge, MA, 50 m below grade</div>
   <h1>Cambridge Underground <span>Token Factory</span></h1>
   <p class="lede">An hourly, year-long twin of a 100 MW inference plant: grid power and conversion, 2035 GPUs serving a realistic prompt mix under latency targets, liquid cooling into river water and an aquifer (the bedrock stores summer heat for winter), and waste heat sold to Cambridge's district heating network. Every heat sink has a hard capacity, so the numbers follow the physics. The optimizer searches every design and reports net energy per generated token.</p>
+  <div class="hero-links">
+    <a class="btn-3d" href="https://kalyanig-personal.github.io/cambridge-token-factory/demo/cambridge-3d.html" target="_blank" rel="noopener">View 3D model <span aria-hidden="true">→</span></a>
+    <span class="hero-hint">Cambridge cutaway: winter and summer heat flows</span>
+  </div>
 </header>
 
 <section class="kpis" aria-label="Key results">
@@ -344,7 +353,7 @@ function facility(cfg) {
   const split = { ground: 0, water: 0, air: 0 };
   const monthly = [];
   for (let m = 0; m < 12; m++) {
-    let mIT = 0, mFac = 0, mHeat = 0;
+    let mIT = 0, mFac = 0, mHeat = 0; const ms = { ground: 0, water: 0, air: 0, src: 0, ates: 0, river: 0 };
     for (let h = 0; h < 24; h++) {
       const tAir = SITE.tAir[m] + SITE.tAirSwing * Math.sin((h - 9) / 24 * 2 * Math.PI);
       const it = SITE.itMW;                         // MW
@@ -381,15 +390,16 @@ function facility(cfg) {
         const Tev = Ts - 2, Tco = Tavail + 3;
         const cop = Math.min(15, Math.max(3, 0.55 * (Tev + 273) / Math.max(1, Tco - Tev)));
         chiller += q * (1 - free) / cop; fans += q * fanF;
-        split[kind] += q;
+        split[kind] += q; ms[kind] += q;
       }
+      ms.src += Qs; for (const st of streams) { if (st[0] === 'water') { if (st[2] === SITE.tAtesCold) ms.ates += st[1]; else ms.river += st[1]; } }
       const pumps = Q * C.pump;
       const cool = chiller + fans + pumps;
       const misc = it * 0.012 + (C.sink === 'ground' ? 0 : 0) + it * 0.004; // lighting, security, tunnel ventilation
       sumIT += it; sumConv += conv; sumCool += cool; sumMisc += misc; sumHP += hpW; sumHeat += Qh; sumRej += Qrej;
       mIT += it; mFac += it + conv + cool + misc; mHeat += Qh;
     }
-    monthly.push({ pue: mFac / mIT, heatShare: mHeat / mIT });
+    monthly.push({ pue: mFac / mIT, heatShare: mHeat / mIT, heatMW: mHeat / 24, wasteToCityMW: ms.src / 24, groundMW: ms.ground / 24, riverMW: ms.river / 24, atesMW: ms.ates / 24, airMW: ms.air / 24, tAir: SITE.tAir[m], tRiver: SITE.tRiver[m] });
   }
   const pue = (sumIT + sumConv + sumCool + sumMisc) / sumIT;
   const hpRatio = sumHP / sumIT;

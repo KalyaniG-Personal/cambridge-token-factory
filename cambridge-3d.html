@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Cambridge Heat Loop 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Public+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: full-bleed 3D scene; season switch + live numbers float top-left; legend bottom-left; labels pinned to scene objects. */
+:root {
+  --bg: #0e171d; --panel: rgba(14, 23, 29, .82); --ink: #eef3f5; --muted: #a9b8c1; --line: rgba(255,255,255,.14);
+  --heat: #ff6a3d; --cool: #43b8d6; --store: #f2b541; --copper: #e08a4c; --good: #46c08a;
+  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); overflow: hidden; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.hud { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); left: max(14px, env(safe-area-inset-left, 0px)); width: min(360px, calc(100vw - 28px)); background: var(--panel); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; z-index: 5; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1; margin: 0; letter-spacing: .01em; text-transform: uppercase; }
+h1 span { color: var(--copper); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: rgba(255,255,255,.06); padding: 4px; border-radius: 8px; }
+.seg button { font: 600 14px var(--body); color: var(--ink); background: transparent; border: 0; border-radius: 6px; padding: 8px 6px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: #0e171d; }
+button:focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.stat { display: grid; gap: 1px; min-width: 0; }
+.stat .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.stat .v { font-family: var(--display); font-weight: 800; font-size: 24px; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.v.heat { color: var(--heat); } .v.cool { color: var(--cool); } .v.store { color: var(--store); }
+.story { font-size: 13px; line-height: 1.45; color: var(--muted); margin: 0; }
+.story b { color: var(--ink); font-weight: 600; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn { font: 600 12px var(--body); color: var(--ink); background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.legend { position: fixed; left: max(14px, env(safe-area-inset-left, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); z-index: 5; max-width: calc(100vw - 28px); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.note { position: fixed; right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; z-index: 5; }
+#labels { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+.lbl { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-size: 11.5px; line-height: 1.25; padding: 4px 7px; border-radius: 5px; background: rgba(10, 16, 20, .78); border: 1px solid var(--line); color: var(--ink); }
+.lbl b { display: block; font-weight: 600; font-size: 12px; }
+.lbl span { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+.lbl.heat { border-color: rgba(255,106,61,.7); } .lbl.cool { border-color: rgba(67,184,214,.7); } .lbl.store { border-color: rgba(242,181,65,.7); }
+.lbl::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 1px; height: 6px; background: var(--line); }
+#err { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--muted); }
+@media (max-width: 640px) {
+  .hud { padding: 10px 12px; gap: 8px; }
+  h1 { font-size: 22px; }
+  .stat .v { font-size: 19px; }
+  .story { display: none; }
+  .lbl { font-size: 10px; padding: 3px 5px; } .lbl span { display: none; }
+  .note { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .seg button { transition: none; } }
+</style>
+
+<div id="stage" aria-label="3D model of the Cambridge underground data center and its heat flows"></div>
+<div id="labels"></div>
+
+<section class="hud" aria-label="Season and heat flows">
+  <div>
+    <div class="eyebrow">Cambridge, MA · 100 MW plant · 50 m below grade</div>
+    <h1>Cambridge <span>Heat Loop</span></h1>
+  </div>
+  <div class="seg" role="group" aria-label="Season">
+    <button id="s-winter" aria-pressed="true">Winter · January</button>
+    <button id="s-summer" aria-pressed="false">Summer · July</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><span class="k">Outdoor / river</span><span class="v" id="v-temp">–</span></div>
+    <div class="stat"><span class="k">Heat to homes</span><span class="v heat" id="v-homes">–</span></div>
+    <div class="stat"><span class="k">To Charles River</span><span class="v cool" id="v-river">–</span></div>
+    <div class="stat"><span class="k">Aquifer</span><span class="v store" id="v-ates">–</span></div>
+  </div>
+  <p class="story" id="story">–</p>
+  <div class="row"><button class="btn" id="b-rot">Pause rotation</button><button class="btn" id="b-reset">Reset view</button></div>
+</section>
+
+<div class="legend" aria-label="Legend">
+  <span><i style="background:var(--heat)"></i>Heat to homes and campus</span>
+  <span><i style="background:var(--cool)"></i>Cooling water</span>
+  <span><i style="background:var(--store)"></i>Stored heat (aquifer)</span>
+</div>
+<div class="note">Stylized, not to scale · depth exaggerated · flows from the plant twin</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+if (!window.THREE) { document.getElementById('stage').innerHTML = '<div id="err">The 3D library did not load. Check the connection and reload.</div>'; return; }
+
+// ---------- data from the plant twin (one 100 MW plant)
+const SEASON = {
+  winter: { label: 'Winter · January', temp: '−1 / 2 °C', homes: '60 MW', river: '58 MW', ates: 'Releases', sky: 0xb9c6cf, fog: 0xb9c6cf, sun: 0.75, ground: 0xe9eef1, tree: null, water: 0x6f8b99,
+    story: '<b>Most of the heat goes to homes.</b> Heat pumps lift 44 MW of 38 °C server heat into 60 MW of district heat for about 25,000 homes and the MIT campus. The aquifer’s warm well gives back heat stored last summer. The rest goes to the cold river.',
+    flows: { city: 1.0, mit: 0.8, river: 0.6, ateCold: 0.0, ateWarmIn: 0.0, ateWarmOut: 0.7 } },
+  summer: { label: 'Summer · July', temp: '24 / 23 °C', homes: '7 MW', river: '67 MW', ates: '30 MW in', sky: 0x8ec9ef, fog: 0xbfe0f2, sun: 1.15, ground: 0x6f9a52, tree: 0x4e8a3a, water: 0x2f7fa3,
+    story: '<b>Most of the heat goes to water.</b> Only 7 MW is needed for hot water. The aquifer’s 10 °C cold well cools the chips (30 MW) and banks that heat in the warm well for winter. The Charles River takes the rest.',
+    flows: { city: 0.15, mit: 0.12, river: 1.0, ateCold: 1.0, ateWarmIn: 1.0, ateWarmOut: 0.0 } },
+};
+
+// ---------- renderer, scene, camera
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 900);
+const HOME = new THREE.Vector3(22, 36, 106), TARGET = new THREE.Vector3(-8, -8, -6);
+camera.position.copy(HOME);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.copy(TARGET); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 40; controls.maxDistance = 260;
+const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+controls.autoRotate = !reduce; controls.autoRotateSpeed = 0.35;
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x445566, 0.65); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 1); sun.position.set(-60, 110, 70); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -120, right: 120, top: 120, bottom: -120, far: 400 }); scene.add(sun);
+
+const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, metalness: 0.0, ...o });
+const box = (w, h, d, mat, x, y, z, cast = true) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; scene.add(m); return m; };
+
+// ---------- world layout (x: west→east, z: south(river)→north(Cambridge), y: up)
+const X0 = -80, X1 = 80, ZN = 26, ZRIVER_N = -18, ZRIVER_S = -40, ZS = -70, ZCUT = 8;
+const groundMat = M(0x6f9a52), snowable = [];
+const north = box(X1 - X0, 1.2, ZN - ZRIVER_N, groundMat, 0, -0.6, (ZN + ZRIVER_N) / 2, false); snowable.push(north);
+// cutaway frame: floor, side walls and a faint ghost of the removed earth
+box(X1 - X0, 0.6, ZN - ZCUT, M(0x55504a), 0, -24.3, (ZN + ZCUT) / 2, false);
+for (const sx of [X0, X1]) box(0.6, 23, ZN - ZCUT, M(0x6b655d), sx, -12.6, (ZN + ZCUT) / 2, false);
+const ghost = new THREE.Mesh(new THREE.BoxGeometry(X1 - X0, 22.8, ZN - ZCUT), new THREE.MeshBasicMaterial({ color: 0x8a6f52, transparent: true, opacity: 0.06, depthWrite: false })); ghost.position.set(0, -12.6, (ZN + ZCUT) / 2); scene.add(ghost);
+const aqGhost = new THREE.Mesh(new THREE.BoxGeometry(X1 - X0, 5.5, ZN - ZCUT), new THREE.MeshBasicMaterial({ color: 0x4f8fb0, transparent: true, opacity: 0.22, depthWrite: false })); aqGhost.position.set(0, -14.75, (ZN + ZCUT) / 2); scene.add(aqGhost);
+const south = box(X1 - X0, 1.2, ZRIVER_S - ZS, groundMat, 0, -0.6, (ZRIVER_S + ZS) / 2, false); snowable.push(south);
+// underground strata visible at the cut face (z = ZN)
+const strata = [[-1.2, -4.5, 0x8a6f52, 'fill and clay'], [-4.5, -12, 0x7b7266, 'Cambridge argillite (bedrock)'], [-12, -17.5, 0x5f7f8f, 'aquifer'], [-17.5, -24, 0x6b655d, 'deep bedrock']];
+for (const [top, bot, c] of strata) box(X1 - X0, top - bot, ZCUT - ZS, M(c, { roughness: 1 }), 0, (top + bot) / 2, (ZCUT + ZS) / 2, false);
+// river channel water
+const waterMat = M(0x2f7fa3, { roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.92 });
+const river = box(X1 - X0, 0.6, ZRIVER_N - ZRIVER_S, waterMat, 0, -1.0, (ZRIVER_N + ZRIVER_S) / 2, false);
+// river bed cut into strata (darker strip)
+box(X1 - X0, 0.4, ZRIVER_N - ZRIVER_S, M(0x4a5a5f), 0, -1.5, (ZRIVER_N + ZRIVER_S) / 2, false);
+// ice floes (winter)
+const ice = new THREE.Group(); scene.add(ice);
+for (let i = 0; i < 26; i++) { const m = new THREE.Mesh(new THREE.CylinderGeometry(1 + Math.random() * 2.2, 1 + Math.random() * 2.2, 0.15, 7), M(0xeef5f8)); m.position.set(X0 + 4 + Math.random() * (X1 - X0 - 8), -0.62, (Math.random() < .5 ? ZRIVER_N - 1.5 - Math.random() * 3 : ZRIVER_S + 1.5 + Math.random() * 3)); ice.add(m); }
+
+// ---------- Cambridge north bank
+// Memorial Drive strip
+box(X1 - X0, 0.05, 2.2, M(0x44484c), 0, 0.03, ZRIVER_N + 3, false);
+// domed neoclassical campus building on the river (stylized)
+const campus = new THREE.Group(); scene.add(campus);
+const lime = M(0xd8d2c4), limeDark = M(0xbdb6a7);
+const cx = -2, cz = -6;
+const addTo = (g, w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; g.add(m); return m; };
+addTo(campus, 14, 7, 10, lime, cx, 3.5, cz + 3);
+for (const s of [-1, 1]) { addTo(campus, 7, 6, 18, lime, cx + s * 12, 3, cz + 1); addTo(campus, 6, 6, 6, limeDark, cx + s * 12, 3, cz - 9); }
+for (let i = 0; i < 10; i++) { const col = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 6, 10), M(0xf1ece0)); col.position.set(cx - 4.5 + i, 3, cz - 2.4); col.castShadow = true; campus.add(col); }
+addTo(campus, 11, 1.2, 1.6, lime, cx, 6.6, cz - 2.4);
+const drum = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 3, 24), lime); drum.position.set(cx, 8.5, cz + 3); campus.add(drum);
+const dome = new THREE.Mesh(new THREE.SphereGeometry(4.2, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), M(0xcfc8b6, { roughness: 0.6 })); dome.position.set(cx, 10, cz + 3); dome.castShadow = true; campus.add(dome);
+// lawn courtyard in front of the campus
+const lawn = box(20, 0.06, 7, M(0x5f8f45), cx, 0.04, cz - 6.5, false);
+// Central Utilities Plant (campus) with a short stack
+box(6, 5, 5, M(0x8c7d70), cx + 22, 2.5, cz + 10); const cupStack = box(1.2, 7, 1.2, M(0x9a8c80), cx + 23.8, 7, cz + 11);
+
+// Kendall-area plant (east, downriver) with two stacks
+box(10, 7, 7, M(0x7a7f85), 52, 3.5, -8); box(1.6, 14, 1.6, M(0x8a8f95), 49, 11, -8); box(1.6, 12, 1.6, M(0x8a8f95), 55, 10, -8);
+
+// Harvard Bridge / Mass Ave crossing (west of campus)
+const bx = -24;
+box(4, 0.6, ZRIVER_N - ZRIVER_S + 6, M(0x8e8f90), bx, 0.6, (ZRIVER_N + ZRIVER_S) / 2);
+for (let z = ZRIVER_S + 1; z < ZRIVER_N; z += 3.6) box(1.4, 2.2, 1, M(0x7d7e80), bx, -0.6, z);
+for (let z = ZRIVER_S - 2; z < ZRIVER_N + 3; z += 2.2) { box(0.18, 0.9, 0.18, M(0xdcdcdc), bx - 1.9, 1.3, z); box(0.18, 0.9, 0.18, M(0xdcdcdc), bx + 1.9, 1.3, z); }
+
+// brick triple-deckers and row houses (Cambridgeport / Kendall neighborhoods)
+const brick = [0x8e3b2b, 0x9b4a35, 0x7c3426, 0xa65a40], clap = [0xc9b79c, 0x9fb2b5, 0xd7cfc0, 0x8f9e86];
+const houses = [], windowsMat = new THREE.MeshStandardMaterial({ color: 0x223038, emissive: 0xffb25e, emissiveIntensity: 0.0 });
+function house(x, z, w, h, d, c) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(c)); body.position.y = h / 2; body.castShadow = body.receiveShadow = true; g.add(body);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.35, d + 0.3), M(0x3e3e40)); roof.position.y = h + 0.17; roof.castShadow = true; g.add(roof); snowable.push(roof);
+  for (let f = 0; f < Math.floor(h / 2.2); f++) for (const s of [-1, 1]) { const win = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.05), windowsMat); win.position.set(s * w * 0.25, 1.4 + f * 2.2, -d / 2 - 0.03); g.add(win); }
+  houses.push(g); return g;
+}
+for (let i = 0; i < 6; i++) for (let j = 0; j < 4; j++) {
+  const x = 12 + i * 5.2 + (j % 2) * 1.2, z = 2 + j * 5.6;
+  const tri = (i + j) % 3 === 0; house(x, z, 3.6, tri ? 7.2 : 5.6, 4, tri ? clap[(i + j) % 4] : brick[(i * 3 + j) % 4]);
+}
+for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) house(-72 + i * 5, 4 + j * 6.2, 4, 5 + (i % 3), 4.4, brick[(i + j) % 4]);
+// streets
+box(64, 0.04, 1.6, M(0x4a4d50), 28, 0.03, -0.6, false); box(36, 0.04, 1.6, M(0x4a4d50), -48, 0.03, 1.2, false);
+
+// trees along the river (Esplanade / Memorial Drive) and streets
+const trees = [];
+function tree(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.25, 2.2, 6), M(0x5a4636)); trunk.position.y = 1.1; trunk.castShadow = true; g.add(trunk);
+  const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5, 0), M(0x4e8a3a, { flatShading: true })); crown.position.y = 3; crown.castShadow = true; g.add(crown);
+  const bare = new THREE.Group(); for (let k = 0; k < 4; k++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 1.4, 4), M(0x4d3d30)); b.position.y = 2.6; b.rotation.z = (k - 1.5) * 0.45; b.rotation.y = k; bare.add(b); } g.add(bare);
+  trees.push({ g, crown, bare });
+}
+for (let x = X0 + 4; x < X1 - 4; x += 5.5) { if (Math.abs(x - bx) > 4) { tree(x, ZRIVER_N + 1.4); tree(x + 2, ZRIVER_S - 1.6); } }
+for (let x = 12; x < 44; x += 6) tree(x, -2.6);
+
+// Boston skyline on the south bank (Back Bay row houses + towers)
+for (let i = 0; i < 26; i++) house(X0 + 6 + i * 5.8, ZRIVER_S - 6, 4.6, 5.5 + (i % 4) * 0.8, 4.4, [0x7d4a3a, 0x8b5a46, 0x6f4434, 0x96664f][i % 4]);
+const glass = M(0x9fb4c4, { roughness: 0.35, metalness: 0.05 }), stone = M(0xc9c2b6);
+const towers = [[-30, -56, 6, 18, glass], [-18, -60, 7, 26, glass], [-6, -55, 6, 16, stone], [6, -62, 6, 22, glass], [18, -57, 5, 14, stone], [30, -63, 8, 30, M(0x8fb0c8, { roughness: .3, metalness: .05 })], [44, -58, 6, 18, glass], [-44, -62, 6, 15, stone], [56, -64, 6, 13, stone]];
+for (const [x, z, w, h, mat] of towers) { const t = box(w, h, w, mat, x, h / 2, z); snowable.push(t); }
+const crown = new THREE.Mesh(new THREE.ConeGeometry(2.4, 6, 4), stone); crown.position.set(-6, 19, -55); crown.rotation.y = Math.PI / 4; scene.add(crown);
+
+// sailboats (summer)
+const boats = new THREE.Group(); scene.add(boats);
+for (let i = 0; i < 9; i++) {
+  const b = new THREE.Group(); const hull = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.35, 0.6), M(0xf3f3f3)); b.add(hull);
+  const sail = new THREE.Mesh(new THREE.ConeGeometry(0.9, 3, 3), M(0xffffff)); sail.position.set(0.2, 1.7, 0); sail.scale.z = 0.12; b.add(sail);
+  b.position.set(X0 + 10 + i * 16 + Math.random() * 6, -0.45, ZRIVER_S + 4 + Math.random() * 14); b.rotation.y = Math.random() * Math.PI; boats.add(b);
+}
+
+// ---------- the underground plant (near the cut face so it is visible)
+const HALL = { x: -12, y: -8.5, z: 17 };
+const hall = box(26, 4.2, 9, M(0xd5dade, { transparent: true, opacity: 0.35, roughness: 0.4 }), HALL.x, HALL.y, HALL.z, false);
+const rackMat = new THREE.MeshStandardMaterial({ color: 0x2b2f33, emissive: 0xff7a3d, emissiveIntensity: 0.9 });
+for (let i = 0; i < 9; i++) for (const r of [-1, 1]) box(1.4, 3, 1.2, rackMat, HALL.x - 11 + i * 2.75, HALL.y - 0.3, HALL.z + r * 2.2, false);
+// access shaft + surface pavilion + heat-pump station
+box(2.6, 7, 2.6, M(0x9aa3a8, { transparent: true, opacity: 0.6 }), HALL.x + 8, -4.2, HALL.z - 2, false);
+box(7, 3.2, 5, M(0x55666f), HALL.x + 8, 1.6, HALL.z - 2);
+const hp = box(9, 4.5, 6, M(0xc9cfd3), HALL.x - 8, 2.25, HALL.z - 4);
+// aquifer wells
+const wellCold = { x: HALL.x - 14, z: HALL.z + 1 }, wellWarm = { x: HALL.x + 16, z: HALL.z + 1 };
+for (const [w, c] of [[wellCold, 0x43b8d6], [wellWarm, 0xf2b541]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 7, 12), M(c, { emissive: c, emissiveIntensity: 0.35 })); m.position.set(w.x, -14, w.z + 3); scene.add(m); }
+
+// ---------- pipes and animated flows
+const flows = {};
+function pipe(name, pts, color, radius = 0.32) {
+  const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)), false, 'catmullrom', 0.05);
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 120, radius, 8, false), M(color, { transparent: true, opacity: 0.4, emissive: color, emissiveIntensity: 0.35 }));
+  scene.add(tube);
+  const N = 70, geo = new THREE.BufferGeometry(), pos = new Float32Array(N * 3);
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts3 = new THREE.Points(geo, new THREE.PointsMaterial({ color, size: 1.7, sizeAttenuation: true, transparent: true, opacity: 1, depthWrite: false }));
+  scene.add(pts3);
+  flows[name] = { curve, tube, pts: pts3, N, offs: Array.from({ length: N }, (_, i) => i / N), level: 1 };
+}
+const H = HALL;
+// district heat: hall → heat-pump station → homes (east and west) and campus
+const PZ = 22.5, PY = -5.8;   // pipe gallery along the front of the cutaway
+pipe('city', [[H.x - 4, H.y + 1.5, H.z + 2], [H.x - 4, PY, PZ], [6, PY, PZ], [20, PY, PZ], [34, PY, PZ], [44, PY, PZ], [46, -0.6, PZ - 2]], 0xff6a3d, 0.5);
+pipe('west', [[H.x - 6, H.y + 1.5, H.z + 2], [H.x - 8, PY - 0.9, PZ + 0.8], [-34, PY - 0.9, PZ + 0.8], [-52, PY - 0.9, PZ + 0.8], [-66, -0.6, PZ - 2]], 0xff6a3d, 0.44);
+pipe('mit', [[H.x - 2, PY, PZ], [H.x - 2, -3.6, 12], [-6, -3.6, 6], [cx, -1.4, cz + 3]], 0xff6a3d, 0.42);
+pipe('river', [[H.x + 8, H.y + 1, H.z + 2], [H.x + 10, PY - 1.8, PZ + 1.2], [H.x + 22, PY - 1.8, PZ + 1.2], [H.x + 24, -4.5, 10], [H.x + 22, -2.4, -4], [H.x + 18, -1.4, ZRIVER_N - 4]], 0x43b8d6, 0.5);
+pipe('ateCold', [[wellCold.x, -15.5, wellCold.z + 3], [wellCold.x, -11, wellCold.z + 3], [H.x - 13, H.y, H.z + 2]], 0x43b8d6, 0.4);
+pipe('ateWarmIn', [[H.x + 13, H.y, H.z + 2], [wellWarm.x, -11, wellWarm.z + 3], [wellWarm.x, -15.5, wellWarm.z + 3]], 0xf2b541, 0.4);
+pipe('ateWarmOut', [[wellWarm.x + 1, -15.5, wellWarm.z + 4.5], [wellWarm.x + 1, PY - 0.9, PZ + 2], [H.x - 4, PY - 0.9, PZ + 2], [H.x - 8, -0.6, PZ - 2]], 0xf2b541, 0.36);
+
+// snow particles
+const SN = 1400, snowGeo = new THREE.BufferGeometry(), snowPos = new Float32Array(SN * 3);
+for (let i = 0; i < SN; i++) { snowPos[3 * i] = X0 + Math.random() * (X1 - X0); snowPos[3 * i + 1] = Math.random() * 70; snowPos[3 * i + 2] = ZS + Math.random() * (ZN - ZS); }
+snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
+const snow = new THREE.Points(snowGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.45, transparent: true, opacity: 0.85, depthWrite: false })); scene.add(snow);
+
+// ---------- labels pinned to scene points
+const labelsEl = document.getElementById('labels');
+const LABELS = [
+  { at: [H.x, H.y - 2.6, H.z + 5], cls: '', title: 'AI data hall, 50 m down', sub: () => '100 MW · coolant 28 → 38 °C' },
+  { at: [H.x - 8, 5.5, H.z - 4], cls: 'heat', title: 'Heat-pump station', sub: () => S === 'winter' ? '44 MW in → 60 MW out at ~75 °C' : 'Hot water only · 7 MW' },
+  { at: [36, 10, 19], cls: 'heat', title: 'Cambridgeport homes', sub: () => S === 'winter' ? 'Heated by the data center' : 'Hot water only' },
+  { at: [cx, 16, cz + 3], cls: 'heat', title: 'MIT campus', sub: () => S === 'winter' ? 'Low-temperature heat for campus buildings' : 'Minimal heat demand' },
+  { at: [H.x + 8, 1.5, ZRIVER_N - 6], cls: 'cool', title: 'Charles River intake', sub: () => S === 'winter' ? '58 MW · river 2 °C' : '67 MW · river 23 °C' },
+  { at: [wellCold.x, -17, wellCold.z + 3], cls: 'cool', title: 'Aquifer cold well', sub: () => S === 'winter' ? 'Recharging with winter cold' : '10 °C · cools 30 MW' },
+  { at: [wellWarm.x, -17, wellWarm.z + 3], cls: 'store', title: 'Aquifer warm well', sub: () => S === 'winter' ? 'Gives back summer heat' : 'Banking 30 MW for winter' },
+  { at: [-18, 30, -60], cls: '', title: 'Boston (Back Bay)', sub: () => 'across the Charles' },
+  { at: [-46, 1.5, -29], cls: 'cool', title: 'Charles River', sub: () => S === 'winter' ? 'Ice at the banks' : 'Sailing season' },
+  { at: [52, 16, -8], cls: '', title: 'Kendall power plant', sub: () => 'Existing district steam' },
+];
+for (const l of LABELS) { l.el = document.createElement('div'); l.el.className = 'lbl ' + l.cls; labelsEl.appendChild(l.el); l.v = new THREE.Vector3(...l.at); }
+function placeLabels() {
+  const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight, v = new THREE.Vector3();
+  for (const l of LABELS) {
+    v.copy(l.v).project(camera);
+    const on = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
+    l.el.style.display = on ? '' : 'none';
+    if (on) { l.el.style.left = ((v.x + 1) / 2 * w) + 'px'; l.el.style.top = ((1 - v.y) / 2 * h) + 'px'; }
+  }
+}
+function fillLabels() { for (const l of LABELS) l.el.innerHTML = `<b>${l.title}</b><span>${l.sub()}</span>`; }
+
+// ---------- season switching
+let S = 'winter';
+function setSeason(s) {
+  S = s; const d = SEASON[s];
+  document.getElementById('s-winter').setAttribute('aria-pressed', String(s === 'winter'));
+  document.getElementById('s-summer').setAttribute('aria-pressed', String(s === 'summer'));
+  document.getElementById('v-temp').textContent = d.temp;
+  document.getElementById('v-homes').textContent = d.homes;
+  document.getElementById('v-river').textContent = d.river;
+  document.getElementById('v-ates').textContent = d.ates;
+  document.getElementById('story').innerHTML = d.story;
+  scene.background = new THREE.Color(d.sky); scene.fog = new THREE.Fog(d.fog, 160, 420);
+  sun.intensity = d.sun; hemi.intensity = s === 'winter' ? 0.75 : 0.6;
+  groundMat.color.setHex(d.ground); lawn.material.color.setHex(s === 'winter' ? 0xf2f5f7 : 0x5f8f45);
+  for (const r of snowable) if (r !== north && r !== south && r.geometry && r.geometry.parameters && r.geometry.parameters.height < 0.5) r.material.color.setHex(s === 'winter' ? 0xf4f7f9 : 0x3e3e40);
+  waterMat.color.setHex(d.water);
+  for (const t of trees) { t.crown.visible = s === 'summer'; t.bare.visible = s === 'winter'; }
+  boats.visible = s === 'summer'; ice.visible = s === 'winter'; snow.visible = s === 'winter';
+  windowsMat.emissiveIntensity = s === 'winter' ? 0.9 : 0.05;
+  for (const [k, f] of Object.entries(flows)) { const lv = d.flows[k] !== undefined ? d.flows[k] : (k === 'west' ? d.flows.city : 0); f.level = lv; f.pts.visible = lv > 0.01; f.tube.material.opacity = 0.18 + 0.4 * lv; }
+  fillLabels();
+  try { history.replaceState(null, '', '#' + s); } catch (e) {}
+}
+document.getElementById('s-winter').onclick = () => setSeason('winter');
+document.getElementById('s-summer').onclick = () => setSeason('summer');
+const rotBtn = document.getElementById('b-rot');
+rotBtn.textContent = controls.autoRotate ? 'Pause rotation' : 'Rotate';
+rotBtn.onclick = () => { controls.autoRotate = !controls.autoRotate; rotBtn.textContent = controls.autoRotate ? 'Pause rotation' : 'Rotate'; };
+document.getElementById('b-reset').onclick = () => { camera.position.copy(HOME); controls.target.copy(TARGET); };
+
+// ---------- resize + loop
+function resize() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w < 640 ? 55 : 42; camera.updateProjectionMatrix(); }
+window.addEventListener('resize', resize); resize();
+const clock = new THREE.Clock();
+function tick() {
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  for (const f of Object.values(flows)) {
+    if (!f.pts.visible) continue;
+    const p = f.pts.geometry.attributes.position, shown = Math.max(6, Math.round(f.N * f.level)), sp = 0.05 + 0.07 * f.level;
+    for (let i = 0; i < f.N; i++) {
+      if (i >= shown) { p.setXYZ(i, 0, -500, 0); continue; }
+      const u = (f.offs[i] + t * sp * (reduce ? 0.3 : 1)) % 1, q = f.curve.getPointAt(u); p.setXYZ(i, q.x, q.y, q.z);
+    }
+    p.needsUpdate = true;
+  }
+  if (snow.visible && !reduce) { const a = snow.geometry.attributes.position; for (let i = 0; i < SN; i++) { let y = a.getY(i) - dt * 6; if (y < 0) y = 70; a.setY(i, y); a.setX(i, a.getX(i) + Math.sin(t + i) * 0.01); } a.needsUpdate = true; }
+  if (boats.visible) boats.children.forEach((b, i) => { b.position.x += Math.sin(t * 0.2 + i) * 0.01; });
+  controls.update(); renderer.render(scene, camera); placeLabels();
+  requestAnimationFrame(tick);
+}
+setSeason((location.hash || '').replace('#', '') === 'summer' ? 'summer' : 'winter');
+tick();
+})();
+</script>
+
+</body>
+</html>

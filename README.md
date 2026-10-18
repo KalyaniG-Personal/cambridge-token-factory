@@ -3,9 +3,10 @@
 **The AI data center of 2035, 50 m under Cambridge, MA.** Built for Track 1 of the SundAI × MIT AI Hackathon: design the most cost-effective energy-to-token conversion factory.
 
 - **Live demo:** `index.html` (fleet planner and plant digital twin)
+- **3D model:** `demo/cambridge-3d.html` (Cambridge cutaway: winter and summer heat flows to homes, MIT, the Charles River and the aquifer)
 - **Bonus:** `demo/cool-chiplets.html` (Track 2 chiplet thermal optimizer)
-- **Pitch:** `pitch/` has the 10-slide deck (speaker notes, sources on every slide) and the Word playbook with script, Q&A and challenges
-- **Research and citations:** `pitch/Cambridge_Token_Factory_Research_Citations.docx` lists every paper and source with what we used it for; `pitch/Research_Citations_QR.png` links to it
+- **Pitch:** `pitch/` has the 12-slide deck (speaker notes, sources on every slide) and the Word playbook with script, Q&A and challenges
+- **Research and citations:** `Cambridge_Token_Factory_Research_Citations.docx` lists every paper and source with what we used it for; `Research_Citations_QR.png` links to it
 
 The demos are single self-contained HTML files. Open them in any browser; there's no build step and no server.
 
@@ -63,6 +64,8 @@ Each claim and the evidence behind it. Numbers match the deck and the playbook.
 | Meta Odense, Denmark | ~45 MW of heat pumps; waste heat to 12,000+ homes | [15] |
 | Stockholm Data Parks, Sweden | Data center heat for ~2,500 apartments | [1] |
 | Microsoft and Fortum, Espoo, Finland | Planned ~40% of the area's district heat | [18] |
+| MIT Central Utilities Plant, Cambridge | District steam, power and chilled water for 100+ buildings; studying heat pumps, geothermal, river-water heat exchange | [20]–[23] |
+| Vicinity Kendall plant, Cambridge | 42 MW electric boiler (2024); 35 MW Charles River heat pump under construction | [25][26] |
 
 No study or plant yet combines all of these at 100 MW under a city. The evidence supports each link, and the twin shows how they fit.
 
@@ -105,6 +108,20 @@ No study or plant yet combines all of these at 100 MW under a city. The evidence
 [18] Eurelectric. Microsoft data centers to provide 40% of Fortum’s electricity-based district heating in Espoo, Finland. *(industry)* https://www.eurelectric.org/stories/microsoft-data-centers-provide-40-of-fortums-electricity-based-district-heating-in-espoo-finland/
 
 [19] HPCwire (27 Jan 2023). PFAS regulations, 3M exit to impact two-phase cooling in HPC. *(industry)* https://www.hpcwire.com/2023/01/27/pfas-regulations-3m-exit-to-impact-two-phase-cooling-in-hpc/
+
+[20] MIT Department of Facilities. Central Utilities Plant (cogeneration; electricity, steam, chilled water; upgrade 2019–2021). *(report)* https://web.mit.edu/facilities/about/utilities/cup.html
+
+[21] MIT News (3 May 2017). Mass. Department of Environmental Protection set to approve Central Utilities Plant upgrade: two 22 MW turbines with heat recovery steam generators; serves 100+ buildings. *(report)* https://news.mit.edu/index%2Ephp/2017/mass-department-environmental-protection-set-to-approve-central-utilities-plant-upgrade-0503
+
+[22] International District Energy Association blog (27 Sep 2022). How MIT is working to reduce carbon emissions on our campus. *(industry)* https://www.districtenergy.org/blogs/district-energy/2022/09/27/how-mit-is-working-to-reduce-carbon-emissions-on-o
+
+[23] MIT Office of Sustainability (Oct 2023). Decarbonizing MIT’s District Energy System (poster): pathways incl. heat pumps, geothermal, river-water heat exchange, storage, green steam. *(report)* https://sustainability.mit.edu/sites/default/files/2024-01/MIT%20Decarb%20District%20Energy%20Poster%202023-10-25%5B83%5D.pdf
+
+[24] Inside Climate News (29 Jan 2025). As MIT aims to decarbonize, competing ideas focus on thermal energy systems. *(industry)* https://insideclimatenews.org/news/29012025/mit-decarbonization-thermal-energy-systems/
+
+[25] Engineering News-Record (24 Apr 2024). Cambridge, Mass., cogeneration plant upgraded with 42-MW electric boiler (Vicinity Energy, Kendall). *(industry)* https://www.enr.com/articles/58524-cambridge-mass-cogeneration-plant-upgraded-with-42-mw-electric-boiler
+
+[26] pv magazine USA (6 Nov 2025). Work underway on ‘river’ heat pump complex in Massachusetts: 35 MW Charles River heat pump at Vicinity’s Kendall facility. *(industry)* https://pv-magazine-usa.com/2025/11/06/work-underway-on-river-heat-pump-complex-in-massachusetts/
 
 ## Assumptions
 
