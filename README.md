@@ -5,6 +5,7 @@
 - **Live demo:** `index.html` (fleet planner and plant digital twin)
 - **Bonus:** `demo/cool-chiplets.html` (Track 2 chiplet thermal optimizer)
 - **Pitch:** `pitch/` has the 10-slide deck (speaker notes, sources on every slide) and the Word playbook with script, Q&A and challenges
+- **Research and citations:** `pitch/Cambridge_Token_Factory_Research_Citations.docx` lists every paper and source with what we used it for; `pitch/Research_Citations_QR.png` links to it
 
 The demos are single self-contained HTML files. Open them in any browser; there's no build step and no server.
 
