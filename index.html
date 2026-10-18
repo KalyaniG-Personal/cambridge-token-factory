@@ -101,7 +101,7 @@ td input.num { width: 80px; font: 13px var(--mono); padding: 3px 5px; border: 1p
 <header>
   <div class="eyebrow">Track 1 · SundAI × MIT AI Hackathon · fleet + plant digital twin · Cambridge, MA, 50 m below grade</div>
   <h1>Cambridge Underground <span>Token Factory</span></h1>
-  <p class="lede">An hourly, year-long twin of a 100 MW inference plant: grid power and conversion, 2035 GPUs serving a realistic prompt mix under latency targets, liquid cooling into the 12 °C bedrock, and waste heat sold to Cambridge's district heating network. The optimizer searches every design and reports net energy per generated token.</p>
+  <p class="lede">An hourly, year-long twin of a 100 MW inference plant: grid power and conversion, 2035 GPUs serving a realistic prompt mix under latency targets, liquid cooling into river water and an aquifer (the bedrock stores summer heat for winter), and waste heat sold to Cambridge's district heating network. Every heat sink has a hard capacity, so the numbers follow the physics. The optimizer searches every design and reports net energy per generated token.</p>
 </header>
 
 <section class="kpis" aria-label="Key results">
@@ -166,6 +166,15 @@ td input.num { width: 80px; font: 13px var(--mono); padding: 3px 5px; border: 1p
     <fieldset id="f-cool"><legend>Cooling</legend></fieldset>
     <label class="opt"><input type="checkbox" id="c-pfas" checked> PFAS-free fluids only (optimizer skips two-phase fluorinated immersion)</label>
     <p class="note" id="pfas-warn" hidden style="color:var(--heat)">This fluid is a PFAS "forever chemical". 3M has exited PFAS production, so supply and regulation are at risk.</p>
+    <fieldset><legend>Heat sinks per 100 MW plant</legend>
+      <div class="rangehead"><span>Boreholes (200 m)</span><b id="bh-val">–</b></div>
+      <input type="range" id="c-bh" min="0" max="5000" step="250" value="1000" aria-label="Number of boreholes">
+      <div class="rangehead"><span>River intake (permit)</span><b id="rv-val">–</b></div>
+      <input type="range" id="c-rv" min="0" max="150" step="10" value="100" aria-label="River intake capacity">
+      <div class="rangehead"><span>Aquifer cold well</span><b id="at-val">–</b></div>
+      <input type="range" id="c-at" min="0" max="60" step="5" value="30" aria-label="Aquifer cold-well capacity">
+      <p class="note" id="sink-help">–</p>
+    </fieldset>
     <fieldset><legend>Clean power, matched hour by hour</legend>
       <div class="rangehead"><span>68% (grid)</span><b id="cfe-val">–</b><span>100%</span></div>
       <input type="range" id="c-cfe" min="68" max="100" step="1" value="95" aria-label="Hourly carbon-free energy share">
@@ -191,7 +200,7 @@ td input.num { width: 80px; font: 13px var(--mono); padding: 3px 5px; border: 1p
 </div>
 
 <section class="grid2">
-  <div class="panel"><div class="head"><h2>Where the joules go</h2><span class="note">J per output token</span></div><canvas class="chart" id="cv-break"></canvas></div>
+  <div class="panel"><div class="head"><h2>Where the joules go</h2><span class="note">J per output token</span></div><canvas class="chart" id="cv-break"></canvas><p class="note" id="gain-split">–</p></div>
   <div class="panel"><div class="head"><h2>Coolant temperature sweep</h2><span class="note" id="sweep-note">current design, net J per token</span></div><canvas class="chart" id="cv-sweep"></canvas></div>
   <div class="panel"><div class="head"><h2>Through the year</h2><span class="note">monthly PUE and heat delivered</span></div><canvas class="chart" id="cv-month"></canvas></div>
   <div class="panel"><div class="head"><h2>Design space</h2><span class="note" id="space-note">every feasible design</span></div><canvas class="chart" id="cv-space"></canvas></div>
@@ -215,7 +224,9 @@ td input.num { width: 80px; font: 13px var(--mono); padding: 3px 5px; border: 1p
       </ul></div>
     <div><h3>Facility (8,760 hours)</h3>
       <ul>
-        <li>Air temperatures: Boston monthly normals + 1 K, ±5 K daily swing. Bedrock at 50 m: 12 °C, warming up to 4 K under load.</li>
+        <li>Air temperatures: Boston monthly normals + 1 K, ±5 K daily swing. Bedrock at 50 m: 12 °C.</li>
+        <li>Each sink has a hard capacity. Boreholes absorb about 50 W per metre (rule of thumb, 30–80), so 1,000 boreholes of 200 m take about 10 MW. River intake is capped at 100 MW by an assumed discharge permit; the aquifer cold well (10 °C) supplies 30 MW in warm months. Anything above capacity goes to surface dry coolers.</li>
+        <li>River and harbour water temperatures are approximate monthly values for Boston (2–23 °C).</li>
         <li>Free cooling when sink + approach ≤ supply; partial up to return (supply + 10 K); chillers at 55% of Carnot for the rest.</li>
         <li>Conversion efficiency: AC chain 89.3%, 800 V DC 96.6%.</li>
         <li>On-site water: cooling towers 1.8 L/kWh of IT; dry coolers 0.08 L/kWh (spray assist on hot days); closed ground loops 0.</li>
@@ -244,7 +255,14 @@ const SITE = {
   tAir: [-0.9, 0.1, 4.3, 10.1, 15.8, 21.1, 24.3, 23.6, 19.6, 13.4, 7.9, 2.6],
   tAirSwing: 5,              // ± daily swing, K
   tGround: 12,               // undisturbed ground at 50 m, °C
-  groundRise: 4,             // loop warming under full heat load, K
+  groundRise: 4,             // loop warming when the borehole field runs at capacity, K
+  boreholes: 1000,           // 200 m boreholes per 100 MW plant (editable)
+  wPerM: 50,                 // sustained heat a borehole absorbs, W per metre (rule of thumb 30–80)
+  riverMW: 100,              // heat the river/harbour intake may take under a discharge permit, MW
+  atesMW: 30,                // aquifer (ATES) cold-well capacity used in warm months, MW
+  tAtesCold: 10,             // cold-well water temperature, °C
+  // Charles River / Boston Harbor surface water, monthly approx °C
+  tRiver: [2, 2, 4, 9, 14, 19, 23, 23, 20, 14, 9, 4],
   heatDemand: [1, .95, .8, .55, .3, .15, .12, .12, .2, .45, .7, .9], // district heat demand factor
   districtMW: 60,            // peak heat the district network can take, MW_th
   price: 82,                 // $/MWh electricity, ISO-NE 2035 estimate
@@ -268,9 +286,11 @@ const WORKLOADS = [
 const COOLING = {
   air:   { name: 'Air + chillers with cooling towers (2025 style)', pump: 0.06, dTj: 0, airTj: 76, sink: 'air', approach: 6, fixedTs: 14, fan: 0.02, wue: 1.8 },
   d2cDry:{ name: 'Direct-to-chip, surface dry coolers', pump: 0.015, dTj: 30, sink: 'air', approach: 7, fan: 0.018, wue: 0.08 },
-  d2cGnd:{ name: 'Direct-to-chip (water), ground loop', pump: 0.022, dTj: 30, sink: 'ground', approach: 4, fan: 0.004, wue: 0 },
-  imm1Gnd:{ name: 'Single-phase immersion, bio-based oil, ground loop', pump: 0.028, dTj: 27, sink: 'ground', approach: 4, fan: 0.004, wue: 0 },
-  immGnd:{ name: 'Two-phase immersion, fluorinated fluid (PFAS), ground loop', pump: 0.018, dTj: 22, sink: 'ground', approach: 4, fan: 0.004, wue: 0, pfas: true },
+  d2cGnd:{ name: 'Direct-to-chip (water), borehole ground loop', pump: 0.022, dTj: 30, sink: 'ground', approach: 4, fan: 0.004, wue: 0 },
+  imm1Gnd:{ name: 'Single-phase immersion, borehole ground loop', pump: 0.028, dTj: 27, sink: 'ground', approach: 4, fan: 0.004, wue: 0 },
+  d2cWat:{ name: 'Direct-to-chip, river + aquifer (ATES)', pump: 0.024, dTj: 30, sink: 'water', approach: 3, fan: 0.008, wue: 0 },
+  imm1Wat:{ name: 'Single-phase immersion, river + aquifer (ATES)', pump: 0.03, dTj: 27, sink: 'water', approach: 3, fan: 0.008, wue: 0 },
+  immGnd:{ name: 'Two-phase immersion, fluorinated fluid (PFAS), borehole loop', pump: 0.018, dTj: 22, sink: 'ground', approach: 4, fan: 0.004, wue: 0, pfas: true },
 };
 const POWER = {
   ac:     { name: 'AC: transformer → UPS → 54 V PSU', eff: 0.893 },
@@ -321,6 +341,7 @@ function facility(cfg) {
   const Tr = Ts + 10;                                 // return temperature
   const tj = isAir ? C.airTj : Ts + C.dTj;            // junction temperature at load
   let sumIT = 0, sumConv = 0, sumCool = 0, sumMisc = 0, sumHP = 0, sumHeat = 0, sumRej = 0;
+  const split = { ground: 0, water: 0, air: 0 };
   const monthly = [];
   for (let m = 0; m < 12; m++) {
     let mIT = 0, mFac = 0, mHeat = 0;
@@ -341,14 +362,27 @@ function facility(cfg) {
         }
       }
       const Qrej = Q - Qs;
-      // heat rejection
-      const Tsink = C.sink === 'ground' ? SITE.tGround + SITE.groundRise * (Qrej / Q) : tAir;
-      const Tavail = Tsink + C.approach;
-      let free = Tavail <= Ts ? 1 : Tavail >= Tr ? 0 : (Tr - Tavail) / (Tr - Ts);
-      const Tev = Ts - 2, Tco = Tavail + 3;
-      const cop = Math.min(15, Math.max(3, 0.55 * (Tev + 273) / Math.max(1, Tco - Tev)));
-      const chiller = Qrej * (1 - free) / cop;
-      const fans = Qrej * C.fan;
+      // heat rejection: split across sinks, each with a hard capacity; overflow goes to surface dry coolers
+      const streams = []; let rem = Qrej;
+      if (C.sink === 'ground') {
+        const cap = SITE.boreholes * 200 * SITE.wPerM / 1e6 * (SITE.itMW / 100);
+        const q = Math.min(rem, cap);
+        if (q > 0) { streams.push(['ground', q, SITE.tGround + SITE.groundRise * (q / cap), C.approach, C.fan]); rem -= q; }
+      } else if (C.sink === 'water') {
+        if (SITE.tRiver[m] > 12) { const q = Math.min(rem, SITE.atesMW * SITE.itMW / 100); if (q > 0) { streams.push(['water', q, SITE.tAtesCold, C.approach, C.fan]); rem -= q; } }
+        const q2 = Math.min(rem, SITE.riverMW * SITE.itMW / 100);
+        if (q2 > 0) { streams.push(['water', q2, SITE.tRiver[m], C.approach, C.fan]); rem -= q2; }
+      }
+      if (rem > 1e-9) streams.push(['air', rem, tAir, C.sink === 'air' ? C.approach : 7, C.sink === 'air' ? C.fan : 0.018]);
+      let chiller = 0, fans = 0;
+      for (const [kind, q, Tsink, appr, fanF] of streams) {
+        const Tavail = Tsink + appr;
+        const free = Tavail <= Ts ? 1 : Tavail >= Tr ? 0 : (Tr - Tavail) / (Tr - Ts);
+        const Tev = Ts - 2, Tco = Tavail + 3;
+        const cop = Math.min(15, Math.max(3, 0.55 * (Tev + 273) / Math.max(1, Tco - Tev)));
+        chiller += q * (1 - free) / cop; fans += q * fanF;
+        split[kind] += q;
+      }
       const pumps = Q * C.pump;
       const cool = chiller + fans + pumps;
       const misc = it * 0.012 + (C.sink === 'ground' ? 0 : 0) + it * 0.004; // lighting, security, tunnel ventilation
@@ -362,7 +396,9 @@ function facility(cfg) {
   const heatRatio = sumHeat / sumIT;
   // net energy: credit heat delivered at the electricity a city air-source heat pump would need (COP 3)
   const credit = heatRatio / 3;
-  return { Ts, Tr, tj, pue, conv: sumConv / sumIT, cool: sumCool / sumIT, misc: sumMisc / sumIT, hp: hpRatio, heat: heatRatio, credit, monthly };
+  const n = 12 * 24;
+  return { Ts, Tr, tj, pue, conv: sumConv / sumIT, cool: sumCool / sumIT, misc: sumMisc / sumIT, hp: hpRatio, heat: heatRatio, credit, monthly,
+    sinkMW: { ground: split.ground / n, water: split.water / n, air: split.air / n } };
 }
 
 function evaluate(cfg) {
@@ -399,6 +435,14 @@ function evaluate(cfg) {
 }
 
 const BASELINE = { cooling: 'air', power: 'ac', precision: 'fp8', spec: false, reuse: false, ts: 14, cfe: 0.68 };
+// split the improvement: same serving stack and power chain in a 2025 air-cooled building, versus the full design
+function gainSplit(c) {
+  const b = evaluate(BASELINE), full = evaluate(c);
+  if (!full.feasible) return null;
+  const stackOnly = evaluate({ ...BASELINE, power: c.power, precision: c.precision, spec: c.spec, cfe: c.cfe });
+  const saved = b.netPerTok - full.netPerTok;
+  return { total: b.netPerTok / full.netPerTok, stack: b.netPerTok / stackOnly.netPerTok, site: stackOnly.netPerTok / full.netPerTok, siteShare: (stackOnly.netPerTok - full.netPerTok) / saved };
+}
 
 function optimize(objective = 'netPerTok', cfe = SITE.gridCfe, pfasFree = true) {
   const all = [];
@@ -428,6 +472,9 @@ $('c-spec').onchange = e => { cfg.spec = e.target.checked; update(); };
 $('c-reuse').onchange = e => { cfg.reuse = e.target.checked; update(); };
 $('c-ts').oninput = e => { cfg.ts = +e.target.value; update(); };
 $('c-cfe').oninput = e => { cfg.cfe = +e.target.value / 100; space = null; update(); };
+$('c-bh').oninput = e => { SITE.boreholes = +e.target.value; baseR = evaluate(BASELINE); space = null; update(); };
+$('c-rv').oninput = e => { SITE.riverMW = +e.target.value; space = null; update(); };
+$('c-at').oninput = e => { SITE.atesMW = +e.target.value; space = null; update(); };
 $('c-pfas').onchange = () => runOpt();
 $('obj').onchange = () => runOpt();
 $('b-opt').onclick = () => runOpt();
@@ -469,6 +516,12 @@ function update() {
   $('k-water-s').textContent = `per prompt · ${wtot.toFixed(0)}k m³/yr (on-site ${(r.annualWater1 / 1000).toFixed(0)}k) · baseline ${baseR.waterPerPrompt.toFixed(2)} mL`;
   const pf = COOLING[cfg.cooling].pfas; $('pfas-warn').hidden = !pf;
   $('cfe-val').textContent = `${Math.round(r.cfe * 100)}% carbon-free`;
+  $('bh-val').textContent = `${SITE.boreholes.toLocaleString()} → ${(SITE.boreholes * 200 * SITE.wPerM / 1e6).toFixed(0)} MW`;
+  $('rv-val').textContent = SITE.riverMW + ' MW'; $('at-val').textContent = SITE.atesMW + ' MW';
+  const sk = r.F.sinkMW, tot = sk.ground + sk.water + sk.air;
+  $('sink-help').textContent = tot > 0 ? `This design sends ${sk.ground.toFixed(0)} MW to boreholes, ${sk.water.toFixed(0)} MW to river and aquifer, ${sk.air.toFixed(0)} MW to surface air (annual average).` : 'All heat is sold to district heating.';
+  const gs = gainSplit(cfg);
+  $('gain-split').textContent = gs ? `Where the ${gs.total.toFixed(1)}× comes from: the serving stack and 800 V DC give ${gs.stack.toFixed(1)}× in any building; the site (liquid cooling to river and aquifer, cooler chips, heat sales) cuts the rest by a further ${Math.round((1 - 1 / gs.site) * 100)}%. Summer PUE stays at ${Math.max(...r.F.monthly.map(m => m.pue)).toFixed(2)}.` : '';
   $('cfe-help').textContent = `${r.gIntensity.toFixed(0)} gCO₂/kWh supplied · electricity $${r.price.toFixed(0)}/MWh (+${((r.price / SITE.price - 1) * 100).toFixed(0)}%) · energy bill $${(r.energyCostYr / 1e6).toFixed(0)}M/yr`;
   const heatMW = r.F.heat * SITE.itMW; $('k-heat').textContent = heatMW.toFixed(0) + ' MW';
   $('k-heat-s').textContent = heatMW > 0 ? `≈ ${Math.round(heatMW * 1e6 * 8760 / 1e3 / 11000).toLocaleString()} homes heated per year (11 MWh each)` : 'Heat rejected to ground or air';
@@ -488,7 +541,7 @@ function drawSection(r) {
   const grid = it + conv + cool + misc + hp;
   const rej = it + conv * 0.6 - (r.cfg.reuse ? heat - hp : 0);
   const W = mw => Math.max(2, Math.sqrt(mw) * 2.6);
-  const ground = COOLING[r.cfg.cooling].sink === 'ground';
+  const sk = r.F.sinkMW;
   const T = (x, y, s, cls = '', anchor = 'start') => `<text x="${x}" y="${y}" class="${cls}" text-anchor="${anchor}">${s}</text>`;
   let s = `<style>
     .lbl{font:600 13px var(--body);fill:var(--ink)} .sm{font:12px var(--mono);fill:var(--muted)} .big{font:800 20px var(--display);fill:var(--ink);letter-spacing:.02em}
@@ -504,7 +557,8 @@ function drawSection(r) {
   ${T(100, 40, grid.toFixed(1) + ' MW in', 'num cu', 'middle')}`;
   s += `<rect x="610" y="56" width="285" height="64" fill="var(--panel)" stroke="var(--heat)" stroke-width="2"/>${T(752, 78, 'Cambridge district heating', 'lbl', 'middle')}
   ${T(752, 97, r.cfg.reuse ? `${heat.toFixed(1)} MW heat · ${hp.toFixed(1)} MW heat pumps` : 'not connected', 'sm', 'middle')}`;
-  if (!ground) s += `<rect x="420" y="80" width="150" height="40" fill="var(--panel)" stroke="var(--water)" stroke-width="2"/>${T(495, 105, r.cfg.cooling === 'air' ? 'Chiller plant' : 'Dry coolers', 'lbl', 'middle')}`;
+  if (sk.water > 0.05) s += `<rect x="420" y="76" width="160" height="44" fill="var(--panel)" stroke="var(--water)" stroke-width="2"/>${T(500, 96, 'River + aquifer', 'lbl', 'middle')}${T(500, 112, 'ATES cold well 10 °C', 'sm', 'middle')}`;
+  if (sk.air > 0.05) s += `<rect x="260" y="76" width="140" height="44" fill="var(--panel)" stroke="var(--muted)" stroke-width="2"/>${T(330, 103, r.cfg.cooling === 'air' ? 'Chillers + towers' : 'Dry coolers', 'lbl', 'middle')}`;
   // shaft
   s += `<rect x="85" y="120" width="30" height="200" fill="var(--panel)" stroke="var(--line)"/>`;
   // power line down
@@ -521,14 +575,15 @@ function drawSection(r) {
   // heat out
   const hx = 610, hy = 260;
   if (r.cfg.reuse && heat > 0) s += `<path d="M${hx} ${hy} H 755 V 120" fill="none" stroke="var(--heat)" stroke-width="${W(heat - hp)}" opacity=".85"/>${T(765, 190, (heat - hp).toFixed(1) + ' MW', 'num ht')}`;
-  if (ground) {
-    s += `<path d="M${hx} 330 H 700 V 420" fill="none" stroke="var(--water)" stroke-width="${W(rej)}" opacity=".85"/>`;
+  if (sk.ground > 0.05) {
+    const cap = SITE.boreholes * 200 * SITE.wPerM / 1e6;
+    s += `<path d="M${hx} 330 H 700 V 420" fill="none" stroke="var(--water)" stroke-width="${W(sk.ground)}" opacity=".85"/>`;
     for (let i = 0; i < 6; i++) { const x = 690 + i * 32; s += `<path d="M${x} 400 V 455" stroke="var(--water)" stroke-width="3" stroke-dasharray="4 4"/>`; }
-    s += `<path d="M690 420 H 860" stroke="var(--water)" stroke-width="3"/>${T(880, 392, `${rej.toFixed(1)} MW to ground loop`, 'num wa', 'end')}`;
-    s += T(880, 470 - 4, `${(SITE.tGround).toFixed(0)}–${(SITE.tGround + SITE.groundRise).toFixed(0)} °C boreholes + aquifer`, 'sm', 'end');
-  } else {
-    s += `<path d="M${hx} 330 H 495 V 120" fill="none" stroke="var(--water)" stroke-width="${W(rej)}" opacity=".85"/>${T(505, 160, `${rej.toFixed(1)} MW rejected`, 'num wa')}`;
+    s += `<path d="M690 420 H 860" stroke="var(--water)" stroke-width="3"/>${T(880, 392, `${sk.ground.toFixed(1)} MW to boreholes (cap ${cap.toFixed(0)} MW)`, 'num wa', 'end')}`;
+    s += T(880, 470 - 4, `${SITE.boreholes.toLocaleString()} × 200 m boreholes · ${SITE.wPerM} W/m`, 'sm', 'end');
   }
+  if (sk.water > 0.05) s += `<path d="M500 200 V 120" fill="none" stroke="var(--water)" stroke-width="${W(sk.water)}" opacity=".85"/>${T(510, 160, `${sk.water.toFixed(1)} MW to water`, 'num wa')}`;
+  if (sk.air > 0.05) s += `<path d="M330 200 V 120" fill="none" stroke="var(--muted)" stroke-width="${W(sk.air)}" opacity=".85"/>${T(340, 160, `${sk.air.toFixed(1)} MW to air`, 'num')}`;
   s += T(245, 448, `Coolant ${r.F.Ts.toFixed(0)} → ${r.F.Tr.toFixed(0)} °C · junction ${r.F.tj.toFixed(0)} °C`, 'big');
   $('xs').innerHTML = s;
 }
@@ -594,10 +649,10 @@ function drawSpace() {
   const pts = space.all; const pad = { l: 52, r: 14, t: 26, b: 34 };
   const xs = pts.map(p => p.F.pue), ys = pts.map(p => p.netPerTok);
   const [X, Y] = frame(c, W, H, Math.min(...xs) - .01, Math.max(...xs) + .01, 0, Math.max(...ys, baseR.netPerTok) * 1.05, pad, 'PUE', 'net J / token', v => v.toFixed(2), v => v.toFixed(2));
-  const col = { air: '--muted', d2cDry: '--earth', d2cGnd: '--water', imm1Gnd: '--good', immGnd: '--copper' };
+  const col = { air: '--muted', d2cDry: '--earth', d2cGnd: '--water', imm1Gnd: '--good', immGnd: '--copper', d2cWat: '--heat', imm1Wat: '--ink' };
   pts.forEach(p => { c.fillStyle = css(col[p.cfg.cooling]); c.globalAlpha = .55; c.beginPath(); c.arc(X(p.F.pue), Y(p.netPerTok), 2.6, 0, 7); c.fill(); }); c.globalAlpha = 1;
   c.strokeStyle = css('--ink'); c.lineWidth = 2; if (cur.feasible) { c.beginPath(); c.arc(X(cur.F.pue), Y(cur.netPerTok), 7, 0, 7); c.stroke(); } c.lineWidth = 1;
-  c.font = '11px IBM Plex Mono, monospace'; let lx = pad.l; [['air', 'air'], ['d2cDry', 'D2C dry'], ['d2cGnd', 'D2C ground'], ['imm1Gnd', '1-phase imm.'], ['immGnd', '2-phase PFAS']].filter(([k]) => space.all.some(p => p.cfg.cooling === k)).forEach(([k, n]) => { c.fillStyle = css(col[k]); c.beginPath(); c.arc(lx + 4, 12, 4, 0, 7); c.fill(); c.fillStyle = css('--muted'); c.textAlign = 'left'; c.fillText(n, lx + 12, 16); lx += c.measureText(n).width + 26; });
+  c.font = '11px IBM Plex Mono, monospace'; let lx = pad.l; [['air', 'air'], ['d2cDry', 'D2C dry'], ['d2cGnd', 'D2C bore'], ['imm1Gnd', 'imm. bore'], ['d2cWat', 'D2C water'], ['imm1Wat', 'imm. water'], ['immGnd', 'PFAS']].filter(([k]) => space.all.some(p => p.cfg.cooling === k)).forEach(([k, n]) => { c.fillStyle = css(col[k]); c.beginPath(); c.arc(lx + 4, 12, 4, 0, 7); c.fill(); c.fillStyle = css('--muted'); c.textAlign = 'left'; c.fillText(n, lx + 12, 16); lx += c.measureText(n).width + 26; });
   $('space-note').textContent = `${pts.length.toLocaleString()} feasible designs · ring = current`;
 }
 
@@ -660,7 +715,7 @@ function planFleet(p) {
   const ctxTB = (chatConc * STREAMS.chat.kvGB + agentConc * STREAMS.agent.kvGB) * 3 / 1000;
   const devKW = dev === 'gpu' ? HW.gpu.kw : HW.lpu.kw;
   const itMW = ((decodeUnits * devKW + prefillGPUs * HW.gpu.kw) * (1 + HW.sysOverhead) * p.itFactor + ctxTB * HW.ctx.kwPerTB) / 1000;
-  const facMW = itMW * p.pue;
+  const facMW = itMW * (p.peakPue || p.pue);   // the grid cap applies to the hottest month, not the annual average
   const hwCost = decodeUnits * (dev === 'gpu' ? HW.gpu.price : HW.lpu.price) + prefillGPUs * HW.gpu.price + ctxTB * HW.ctx.pricePerTB;
   // average load ≈ 1/peak of peak power; facility sized for peak
   const avgPeak = 1 / 1.6;
@@ -683,7 +738,7 @@ function plParams() {
   const r = cur || evaluate(cfg);
   const avgLoad = 1 / 1.6;
   return { mix: PL.mix, decode: PL.decode, leo: PL.leo, siteMW: PL.siteMW, growth: PL.growth, pue: r.F.pue + r.F.hp, itFactor: r.leak,
-    pricePerMWh: r.price, buildPerMW: 13e6, leoKgPerKW: 25, leoBusPerKW: 8000,
+    peakPue: Math.max(...r.F.monthly.map(m => m.pue)) + r.F.hp, pricePerMWh: r.price, buildPerMW: 13e6, leoKgPerKW: 25, leoBusPerKW: 8000,
     heatRevenuePerMWyr: r.F.heat * 8760 * SITE.heatPrice * avgLoad };
 }
 const $B = v => '$' + (v / 1e9).toFixed(1) + 'B';
